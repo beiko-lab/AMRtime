@@ -1,0 +1,5 @@
+// the configured options and settings for AMRtime
+#define AMRtime_VERSION_MAJOR @AMRtime_VERSION_MAJOR@
+#define AMRtime_VERSION_MINOR @AMRtime_VERSION_MINOR@
+#define AMRtime_VERSION_PATCH @AMRtime_VERSION_PATCH@
+    
