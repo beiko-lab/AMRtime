@@ -2,4 +2,5 @@
 #define AMRtime_VERSION_MAJOR @AMRtime_VERSION_MAJOR@
 #define AMRtime_VERSION_MINOR @AMRtime_VERSION_MINOR@
 #define AMRtime_VERSION_PATCH @AMRtime_VERSION_PATCH@
+#define AMRtime_VERSION "@AMRtime_VERSION@"
     
