@@ -23,9 +23,9 @@ include_directories("${PROJECT_BINARY_DIR}")
 
 
 # dependencies
-find_package(ZLIB)
-
+set(SEQAN_FIND_DEPENDENCIES ZLIB BZip2)
 find_package(SeqAn REQUIRED)
+
 include_directories(${SEQAN_INCLUDE_DIRS})
 add_definitions(${SEQAN_DEFINITIONS})
 

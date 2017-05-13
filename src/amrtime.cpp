@@ -1,5 +1,7 @@
 #include <iostream>
+#include <sstream>
 #include <seqan/arg_parse.h>
+#include <unistd.h>
 #include "AMRtimeConfig.h"
 
 int main(int argc, char const ** argv){
@@ -12,7 +14,7 @@ int main(int argc, char const ** argv){
 
     setVersion(parser, AMRtime_VERSION);
 
-    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIIN\fP");
+    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIIN\fP \\fIDB\fP");
 
     addDescription(
             parser,
@@ -21,8 +23,12 @@ int main(int argc, char const ** argv){
             "rapid and reliable way.");
 
     addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::INPUT_FILE, "IN"));
+        seqan::ArgParseArgument::STRING, "IN"));
+
+  addArgument(parser, seqan::ArgParseArgument(
+        seqan::ArgParseArgument::STRING, "DB"));
   
+
 
     seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
 
@@ -32,8 +38,14 @@ int main(int argc, char const ** argv){
     
     seqan::CharString inputFile;
     getArgumentValue(inputFile, parser, 0);
-    
-    std::cout << inputFile << std::endl;
 
+    seqan::CharString dbFile;
+    getArgumentValue(dbFile, parser, 1);
+
+    std::stringstream ss;
+    ss << "./diamond blastx --db " << dbFile << "--in " << inputFile << "-f 6 --min-score 60";
+
+    execv(ss.str().c_str());
+    
     return 0;
 }
