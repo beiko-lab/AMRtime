@@ -3,6 +3,7 @@
 
 import argparse
 import subprocess
+import os
 
 if __name__ == '__main__':
 
@@ -16,35 +17,28 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     output = args.input + '.out'
-
     cmd = "./diamond blastx --db {} -q {} -f 6 \
             --min-score {} -o {} ".format(args.db,
                                           args.input,
                                           args.minscore,
                                           output)
+
     subprocess.call(cmd, shell=True)
 
     temp = output + '.temp'
     if os.path.exists(temp):
         os.remove(temp)
 
+    print('cutting')
     cmd = 'cut -f 1 {} > {}'.format(output, temp)
     subprocess.call(cmd, shell=True)
 
 
-    filtered_input = args.input + '.filtered'
+    filtered_input = args.input + '.{}_filtered'.format(args.minscore)
 
+    print('filtering')
     cmd = './seqtk subseq {} {} > {}'.format(args.input,
                                              temp,
                                              filtered_input)
 
-    if os.path.exists(temp):
-        os.remove(temp)
-
-
-
-
-
-
-
-
+    subprocess.call(cmd, shell=True)
