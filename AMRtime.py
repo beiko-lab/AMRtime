@@ -17,7 +17,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     output = args.input + '.out'
-    cmd = "./diamond blastx --db {} -q {} -f 6 -p 2 \
+    cmd = "./bin/diamond blastx --db {} -q {} -f 6 -p 2 \
             --min-score {} -o {} ".format(args.db,
                                           args.input,
                                           args.minscore,
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     filtered_input = args.input + '.{}_filtered'.format(args.minscore)
 
     print('filtering')
-    cmd = './seqtk subseq {} {} > {}'.format(args.input,
+    cmd = './bin/seqtk subseq {} {} > {}'.format(args.input,
                                              temp,
                                              filtered_input)
     subprocess.call(cmd, shell=True)
