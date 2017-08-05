@@ -6,98 +6,125 @@
 #include <seqan/seq_io.h>
 #include <seqan/sequence.h>
 
+#include "generate_training.h"
+
 using namespace seqan; 
 
-int count_nucleotides(std::string fasta_fp); 
-
-class AMR_annotation {
-    public:
-        std::string aro;
-        uint32_t start;
-        uint32_t end;
-        char strand;
-};
-
-std::map<std::string, std::vector<AMR_annotation>> read_amr_annotations(std::string gff_fp);
-
-
-
 int main(int argc, char *argv[]){
+    // generate_training genome1.fasta,genome2.fasta,genome3.fasta 4,2,3 genome1.gff,genome2.gff,genome3.gff
 
-    int genome_size = count_nucleotides(argv[1]);
-    std::cout << genome_size << std::endl;     
-    
-    read_amr_annotations(argv[2]);
+    std::vector<std::string> genome_list = split(argv[1], ',');
+    std::vector<std::string> abundance_list = split(argv[2], ',');
 
-}
-
-
-
-
-std::map<std::string, std::vector<AMR_annotation>> read_amr_annotations(std::string gff_fp) {
-    // parse the RGI generated GFF file into a
-    // dictionary of format {contig: [Annotation, Annotation, ...]}
-    // for quick access
-
-    GffFileIn gffFileIn;
-    if (!open(gffFileIn, toCString(gff_fp))) {
-        std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
-        //return -1;
+    std::vector<uint32_t> abundances;
+    for (uint32_t i=0; i<length(abundance_list); ++i) {
+        int abundance = atoi(abundance_list.at(i).c_str());
+        abundances.push_back(abundance);
     }
 
-    GffRecord gffRecord;
-    std::string aro;
+    prepare_metagenome(genome_list, abundances);
     
-    // contig: [start: 34, stop: 42,  
-    std::<std::string, std::vector<AMR_annotation>> annotation_lookup;
-    //
+    std::vector<std::string> gff_list = split(argv[3], ',');
+    std::vector<AMR_annotation> amr_annotations = read_amr_annotations(gff_list);
+    return 0;
+}
+
+std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_list) {
+
     std::vector<AMR_annotation> annotations;
 
-    while (!atEnd(gffFileIn)) {
-        try {
-            readRecord(gffRecord, gffFileIn);
+    for(uint32_t i = 0; i < length(gff_list); ++i){
+        GffFileIn gffFileIn;
+        if (!open(gffFileIn, toCString(gff_list[i]))) {
+            std::cerr << "ERROR: Could not open file: " << gff_list[i] << std::endl;
+            //return -1;
+        }
 
-            aro = "";
-            
-            for (unsigned i = 0; i < length(gffRecord.tagValues[1]); ++i) {
-                if (gffRecord.tagValues[1][i] == ','){
-                    break;
+        GffRecord gffRecord;
+        std::string aro;
+
+        while (!atEnd(gffFileIn)) {
+            try {
+                readRecord(gffRecord, gffFileIn);
+
+                aro = "";
+                
+                for (unsigned i = 0; i < length(gffRecord.tagValues[1]); ++i) {
+                    if (gffRecord.tagValues[1][i] == ','){
+                        break;
+                    }
+                    aro.push_back(gffRecord.tagValues[1][i]);
                 }
-                aro.push_back(gffRecord.tagValues[1][i]);
-            }
-            
-            AMR_annotation annot {aro, 
-                                  gffRecord.beginPos, 
-                                  gffRecord.endPos, 
-                                  gffRecord.strand};
+                
+                AMR_annotation annotation {toCString(gffRecord.ref),
+                                           aro, 
+                                           gffRecord.beginPos, 
+                                           gffRecord.endPos, 
+                                           gffRecord.strand};
 
-            if( annotation_lookup.count(gffRecord.ref) > 0){
-                // append to vector
-                annotation_lookup.emplace(gffRecord.ref,
-                                          annotation_lookup[gffRecord.ref].push_back(annot))
+                annotations.push_back(annotation);
+
             }
-            else {
-                // create new 
-                annotation_lookup.emplace(gffRecord.ref, 
-                                          std::vector<AMR_annotation>{annot});
+            catch (ParseError e) {
+                break;
             }
-            
         }
-        catch (ParseError e) {
-            break;
-        }
-    }
-   return annotation_lookup;
+   }
+   return annotations;
 }
 
-
-int count_nucleotides(std::string fasta_fp) {
+int prepare_metagenome(std::vector<std::string> genome_list,
+                       std::vector<uint32_t> abundance_list) {
+    // Copy the genomes up to necessary numbers into the artifical
+    // metagenome contigs
     
-    int nt_count = 0;
+    StringSet<CharString> ids;
+    StringSet<Dna5String> seqs;
+    
+    // read each genome in list and 'amplify' for relative abundance
+    for(uint32_t i = 0; i < length(genome_list); ++i){
+        
+        SeqFileIn seqFileIn;
+        if (!open(seqFileIn, toCString(genome_list[i]))) {
+            std::cerr << "ERROR: Could not open file: " << genome_list[i] << std::endl;
+            return -1;
+        }
 
+        StringSet<CharString> temp_ids;
+        StringSet<Dna5String> temp_seqs;
+
+        readRecords(temp_ids, temp_seqs, seqFileIn);
+        
+        // append the sequences as many times as the relative abundance
+        // implies i.e. if its 3, copy the sequences 3x into the master
+        // metagenome fasta
+        for(uint32_t j = 0; j < abundance_list[i]; ++j){
+            append(ids, temp_ids);
+            append(seqs, temp_seqs);
+        }
+
+    }
+    
+    // dump artificial metagenome to single fasta file
+    SeqFileOut seqFileOut;
+    if (!open(seqFileOut, "temp_metagenome.fasta")) {
+            std::cerr << "ERROR: Could not open file: temp_metagenome.fasta" << std::endl;
+            return -1;
+    }
+
+    writeRecords(seqFileOut, ids, seqs);
+
+    return 0;
+    
+}
+    
+int count_nucleotides(std::string combined_genome_fp){
+    // read a fasta and count the nucleotides
+    int nt_count = 0;
+    
     SeqFileIn seqFileIn;
-    if (!open(seqFileIn, toCString(fasta_fp))) {
-        std::cerr << "ERROR: Could not open file: " << fasta_fp << std::endl;
+    if (!open(seqFileIn, toCString(combined_genome_fp))) {
+        std::cerr << "ERROR: Could not open file: " << combined_genome_fp << std::endl;
         return -1;
     }
 
@@ -109,4 +136,18 @@ int count_nucleotides(std::string fasta_fp) {
     }
 
     return nt_count;
+}
+
+
+std::vector<std::string> split(std::string str, char delimiter) {
+    // split a string on a specific delimiter
+    std::vector<std::string> split_string;
+    std::stringstream ss(str);
+    std::string fragment;
+
+    while(std::getline(ss, fragment, delimiter)){
+        split_string.push_back(fragment);
+    }
+    
+    return split_string;
 }
