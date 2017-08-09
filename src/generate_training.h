@@ -20,7 +20,7 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
                                std::vector<uint32_t> abundance_list,
                                std::string output_name);
 
-int count_nucleotides(std::string fasta_fp); 
+uint32_t count_nucleotides(std::string fasta_fp); 
 
 void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp);
 
