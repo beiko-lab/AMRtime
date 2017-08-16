@@ -11,11 +11,14 @@
 #include "AMRtimeConfig.h"
 #include "generate_training.h"
 
-using namespace seqan;
+//using namespace seqan;
 
 #define MIN_OVERLAP 50
 
+
 std::ostream &operator<<(std::ostream &os, AMR_annotation const &m) { 
+    // Overload the output stream operator for annotation class
+    // to dump the attributes
     return os << " contig: " << m.contig << " aro: " << m.aro 
             << " start: " << m.start << " end: " << m.end << " strand: " << m.strand;
 }
@@ -23,6 +26,8 @@ std::ostream &operator<<(std::ostream &os, AMR_annotation const &m) {
 seqan::ArgumentParser::ParseResult parse_command_line(Options& options, 
                                                       int argc,
                                                       char** argv){
+    // Build argument parser and store parsed arguments 
+    // in an instance of the Options class
     
     seqan::ArgumentParser parser("generate_training");
 
@@ -97,7 +102,9 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
 }
 
 int main(int argc, char *argv[]){
+    // Create simulated metagenome and label the reads
 
+    // Get command line arguments
     Options options;
     seqan::ArgumentParser::ParseResult res = parse_command_line(options, 
                                                                 argc, 
@@ -107,17 +114,31 @@ int main(int argc, char *argv[]){
         return res == seqan::ArgumentParser::PARSE_ERROR;
     }
     
-    std::cout << "Creating metagenome reference" << std::endl;
+    // Generate the synthetic metagenome fasta file
+    // i.e. concatenate the input genomes and 'amplify'
+    // them up to the required copy number to satisfy relative
+    // abundances
+    std::cout << "Creating Synthetic Metagenome Fasta: ";
+    std::vector<std::string>::iterator it;
+    for(it = options.genomes.begin(); it != options.genomes.end(); ++it) {
+        std::cout << *it << " ";
+    }
+    std::cout << std::endl << std::endl;
+
     std::string metagenome_fp = prepare_metagenome(options.genomes, 
                                                    options.relative_abundances,
                                                    options.output_name);
 
-
+    
+    // Determine how many reads we need to create to get the approximate
+    // coverage specified
     uint32_t read_number = estimate_read_depth(metagenome_fp,
                                                options.coverage,
                                                options.read_length);
     
-    std::cout << "Simulating Reads" << std::endl;
+    // Simulate the reads themselves using mason and a system call
+    std::cout << "Simulating Illumina Reads: " << options.read_length << "bp " 
+        << read_number << " reads" << std::endl << std::endl;
     std::stringstream ss;
     std::string simulated_sam_fp = options.output_name + ".sam";
     
@@ -126,16 +147,21 @@ int main(int argc, char *argv[]){
        << simulated_sam_fp << " -o " << options.output_name + ".fq" 
        << " --illumina-read-length " << options.read_length 
        << " --illumina-prob-insert 0 --illumina-prob-deletion 0 --illumina-prob-mismatch-scale 0"
-       << " --illumina-prob-mismatch 0 --illumina-prob-mismatch-begin 0 --illumina-prob-mismatch-end 0" << std::endl;
-       //<< " 2> /dev/null" << std::endl;
+       << " --illumina-prob-mismatch 0 --illumina-prob-mismatch-begin 0 --illumina-prob-mismatch-end 0"
+       << " 2> /dev/null" << std::endl;
        
        
     system(ss.str().c_str());
     
-    std::cout << "Parsing GFF annotations" << std::endl;
+    std::cout << "Parsing GFF annotations: ";
+    for(it = options.annotations.begin(); it != options.annotations.end(); ++it) {
+        std::cout << *it << " ";
+    }
+    std::cout << std::endl << std::endl;
+
     std::vector<AMR_annotation> amr_annotations = read_amr_annotations(options.annotations);
     
-    std::cout << "Creating labels" << std::endl;
+    std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
     create_labels(amr_annotations, simulated_sam_fp, options.output_name);
 
     return 0;
@@ -164,7 +190,7 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
 
         // read header into queriable context
         seqan::BamAlignmentRecord bamRecord;
-        typedef FormattedFileContext<BamFileIn, void>::Type TBamContext;
+        typedef seqan::FormattedFileContext<seqan::BamFileIn, void>::Type TBamContext;
         TBamContext const & bamContext = context(bamFileIn);
 
 
@@ -181,7 +207,7 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
             for (auto &annotation : annotations){
                 
                 // only check when the annotation's contig is the same as the reads
-                if (annotation.contig == toCString(contigNames(bamContext)[bamRecord.rID])) {
+                if (annotation.contig == seqan::toCString(contigNames(bamContext)[bamRecord.rID])) {
                     
                     bool both_pos = annotation.strand == '+' and not hasFlagRC(bamRecord);
                     bool both_neg = annotation.strand == '-' and hasFlagRC(bamRecord);
@@ -206,22 +232,20 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
             
             // print the labels
             if (labels.size() == 0) {
-                labels_fh << bamRecord.qName << ": no label" << std::endl;
+                labels_fh << "NONE" << std::endl;
             }
             else {
-                labels_fh << bamRecord.qName << ": ";
+                //labels_fh << bamRecord.qName << ": ";
                 for (std::vector<std::string>::const_iterator i = labels.begin(); i != labels.end(); ++i){
                     labels_fh << *i << ' ';
                 }
                 labels_fh << std::endl;
-
-            
             }
         }
     }
     
     
-    catch (Exception const & e) {
+    catch (seqan::Exception const & e) {
         std::cout << "ERROR: " << e.what() << std::endl;
         std::exit(1);
     }
@@ -261,7 +285,7 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_li
     for (auto &gff_fp : gff_list){
 
         seqan::GffFileIn gffFileIn;
-        if (!open(gffFileIn, toCString(gff_fp))) {
+        if (!open(gffFileIn, seqan::toCString(gff_fp))) {
             std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
             std::exit(1);
         }
@@ -297,7 +321,7 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_li
 
             }
             // necessary for \r and \n endline chars?
-            catch (ParseError const & e) {
+            catch (seqan::ParseError const & e) {
                 break;
             }
         }
@@ -311,11 +335,11 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
     // Copy the genomes up to necessary numbers into the artifical
     // metagenome contigs
 
-    seqan::StringSet<CharString> ids;
-    seqan::StringSet<Dna5String> seqs;
+    seqan::StringSet<seqan::CharString> ids;
+    seqan::StringSet<seqan::Dna5String> seqs;
 
     // read each genome in list and 'amplify' for relative abundance
-    for(uint32_t genome_ix = 0; genome_ix < length(genome_list); ++genome_ix){
+    for(uint32_t genome_ix = 0; genome_ix < genome_list.size(); ++genome_ix){
 
         seqan::SeqFileIn seqFileIn;
         if (!open(seqFileIn, seqan::toCString(genome_list[genome_ix]))) {
@@ -323,8 +347,8 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
             exit(1);
         }
 
-        seqan::StringSet<CharString> temp_ids;
-        seqan::StringSet<Dna5String> temp_seqs;
+        seqan::StringSet<seqan::CharString> temp_ids;
+        seqan::StringSet<seqan::Dna5String> temp_seqs;
 
         readRecords(temp_ids, temp_seqs, seqFileIn);
 
@@ -340,7 +364,7 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
     }
 
     // dump artificial metagenome to single fasta file
-    std::string metagenome_fp = output_name + "metagenome.fasta";
+    std::string metagenome_fp = output_name + "_metagenome.fasta";
     seqan::SeqFileOut seqFileOut;
     if (!open(seqFileOut, seqan::toCString(metagenome_fp))) {
             std::cerr << "ERROR: Could not open file: temp_metagenome.fasta" << std::endl;
