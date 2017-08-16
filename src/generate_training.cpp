@@ -4,35 +4,33 @@
 #include <algorithm>
 
 #include <seqan/seq_io.h>
+#include <seqan/bam_io.h>
+#include <seqan/arg_parse.h>
 #include <seqan/sequence.h>
 
+#include "AMRtimeConfig.h"
 #include "generate_training.h"
 
 using namespace seqan;
 
-struct Options {
-    std::vector<std::string> genomes;
-    std::vector<std::uint32_t> relative_abundances;
-    std::vector<std::string> annotations;
-    uint32_t coverage;
-    uint32_t read_length;
-    std::string output_name;
+#define MIN_OVERLAP 50
+
+std::ostream &operator<<(std::ostream &os, AMR_annotation const &m) { 
+    return os << " contig: " << m.contig << " aro: " << m.aro 
+            << " start: " << m.start << " end: " << m.end << " strand: " << m.strand;
 }
 
-seqan::ArgumentParser::ParseResult parse_command_line(Options & options, 
+seqan::ArgumentParser::ParseResult parse_command_line(Options& options, 
                                                       int argc,
-                                                      char const ** argv){
+                                                      char** argv){
     
-// generate_training genome1.fasta,genome2.fasta,genome3.fasta 4,2,3 genome1.gff,genome2.gff,genome3.gff coverageX read_length output_name
-    //
-    //
     seqan::ArgumentParser parser("generate_training");
 
     setShortDescription(parser, "Synthetic Metagenomes Generator");
 
     setVersion(parser, AMRtime_VERSION);
 
-    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIGENOME_LIST\fP \\fIANNOTATION_LIST\fP \\fIABUNDANCE_LIST\fP");
+    addUsageLine(parser, "[\\fIOPTIONS] \\fIGENOME_LIST\f \\fIANNOTATION_LIST\f \\fIABUNDANCE_LIST\f");
 
     addDescription(
             parser,
@@ -49,18 +47,18 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options & options,
         seqan::ArgParseArgument::STRING, "abundances"));
 
     addOption(parser, seqan::ArgParseOption(
-        seqan::ArgParseArgument::INT, "coverage",
-        "Required coverage for metagenome"));
+        "c", "coverage", "Required coverage for metagenome",
+        seqan::ArgParseOption::INTEGER, "coverage"));
     setDefaultValue(parser, "coverage", 1);
 
-    addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::INT, "read_length",
-        "length of reads to simulate"));
+    addOption(parser, seqan::ArgParseOption(
+        "r", "read_length", "length of reads to simulate",
+        seqan::ArgParseOption::INTEGER, "read_length"));
     setDefaultValue(parser, "read_length", 150);
 
-    addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::STRING, "output_name",
-        "output file name"));
+    addOption(parser, seqan::ArgParseOption(
+        "o", "output_name", "output file name",
+        seqan::ArgParseOption::STRING, "output_name"));
     setDefaultValue(parser, "output_name", "output");
 
     seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
@@ -70,14 +68,14 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options & options,
     }
     
     std::string temp;
-    getArgumentValue(temp, parser, "genomes");
-    options.genomes = split(temp);
+    getArgumentValue(temp, parser, 0);
+    options.genomes = split(temp, ',');
 
-    getArgumentValue(temp, parser, "annotations");
-    options.annotations = split(temp);
+    getArgumentValue(temp, parser, 1);
+    options.annotations = split(temp, ',');
 
-    getArgumentValue(temp, parser, "abundances");
-    std::vector<std::string> abundance_strings = split(temp);
+    getArgumentValue(temp, parser, 2);
+    std::vector<std::string> abundance_strings = split(temp, ',');
     for (uint32_t i=0; i<abundance_strings.size(); ++i) {
         uint32_t abundance = std::stoi(abundance_strings.at(i).c_str());
         options.relative_abundances.push_back(abundance);
@@ -85,8 +83,9 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options & options,
 
     bool length_ok = (options.genomes.size() == options.annotations.size() && \
             options.annotations.size () == options.relative_abundances.size());
-    if !(length_ok) {
-        std::cerr << "ERROR: You must provide the same number of genomes, annotations (and relative abundances if specified)\n";
+    if (!length_ok) {
+        std::cerr << "ERROR: You must provide the same number of genomes, annotations "
+                  << "(and relative abundances if specified)" << std::endl;
         return seqan::ArgumentParser::PARSE_ERROR;
     }
 
@@ -102,74 +101,172 @@ int main(int argc, char *argv[]){
     Options options;
     seqan::ArgumentParser::ParseResult res = parse_command_line(options, 
                                                                 argc, 
-                                                                argv)
+                                                                argv);
 
     if (res != seqan::ArgumentParser::PARSE_OK){
         return res == seqan::ArgumentParser::PARSE_ERROR;
     }
     
-    
-    std::vector<std::string> genome_list = split(argv[1], ',');
-    std::vector<std::string> abundance_list = split(argv[2], ',');
-
-    std::uint32_t coverage_fold = std::stoi(argv[3]);
-    std::uint32_t read_length = std::stoi(argv[4]);
-    std::string output_name = argv[5];
-
-    std::vector<uint32_t> abundances;
-    for (uint32_t i=0; i<length(abundance_list); ++i) {
-        int abundance = std::stoi(abundance_list.at(i).c_str());
-        abundances.push_back(abundance);
-    }
-
-
-    std::string metagenome_fp = prepare_metagenome(genome_list, abundances,
-                                                   output_name);
+    std::cout << "Creating metagenome reference" << std::endl;
+    std::string metagenome_fp = prepare_metagenome(options.genomes, 
+                                                   options.relative_abundances,
+                                                   options.output_name);
 
 
     uint32_t read_number = estimate_read_depth(metagenome_fp,
-                                     coverage_fold,
-                                     read_length);
-
+                                               options.coverage,
+                                               options.read_length);
+    
+    std::cout << "Simulating Reads" << std::endl;
     std::stringstream ss;
-    std::string simulated_sam_fp = output_name + ".sam";
-    ss << "mason_simulator -ir " << metagenome_fp << " -n " << read_number << " -oa " << simulated_sam_fp << " -o " << output_name + ".fq" << std::endl;
-    std::cout << ss.str() << std::endl;
+    std::string simulated_sam_fp = options.output_name + ".sam";
+    
+    // run mason with no sequencing errors for now
+    ss << "mason_simulator -ir " << metagenome_fp << " -n " << read_number << " -oa " 
+       << simulated_sam_fp << " -o " << options.output_name + ".fq" 
+       << " --illumina-read-length " << options.read_length 
+       << " --illumina-prob-insert 0 --illumina-prob-deletion 0 --illumina-prob-mismatch-scale 0"
+       << " --illumina-prob-mismatch 0 --illumina-prob-mismatch-begin 0 --illumina-prob-mismatch-end 0" << std::endl;
+       //<< " 2> /dev/null" << std::endl;
+       
+       
     system(ss.str().c_str());
-
-    std::vector<std::string> gff_list = split(argv[3], ',');
-    std::vector<AMR_annotation> amr_annotations = read_amr_annotations(gff_list);
-
-    create_labels(amr_annotations, simulated_sam_fp);
+    
+    std::cout << "Parsing GFF annotations" << std::endl;
+    std::vector<AMR_annotation> amr_annotations = read_amr_annotations(options.annotations);
+    
+    std::cout << "Creating labels" << std::endl;
+    create_labels(amr_annotations, simulated_sam_fp, options.output_name);
 
     return 0;
 }
 
 
-void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp){
-
-    BamFileIn samFileIn(sam_fp.c_str());
-    BamAlignmentRecord record;
-    while (!atEnd(samFileIn)){
-        readRecord(record, samFileIn);
-        // check annotations
-        // if in any range of simulated read print list of AROs to label file
-        // else print 0 on line
+void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp, 
+                   std::string output_name){
+    
+    // Open input file, BamFileIn can read SAM and BAM files.
+    seqan::BamFileIn bamFileIn;
+    if (!open(bamFileIn, seqan::toCString(sam_fp))) {
+        std::cerr << "ERROR: Could not open " << sam_fp << std::endl;
+        std::exit(1);
     }
+    // Open output file, BamFileOut accepts also an ostream and a format tag.
+    
+            
+    std::ofstream labels_fh;
+    labels_fh.open (output_name + ".labels");
+    
+    try {
+        // Copy header.
+        seqan::BamHeader header;
+        readHeader(header, bamFileIn);
+
+        // read header into queriable context
+        seqan::BamAlignmentRecord bamRecord;
+        typedef FormattedFileContext<BamFileIn, void>::Type TBamContext;
+        TBamContext const & bamContext = context(bamFileIn);
+
+
+        
+        // for every read generated
+        while (!atEnd(bamFileIn)) {
+            
+            readRecord(bamRecord, bamFileIn);
+            
+            // create a vector of labels
+            std::vector<std::string> labels {};
+            
+            // by checking all the annotations
+            for (auto &annotation : annotations){
+                
+                // only check when the annotation's contig is the same as the reads
+                if (annotation.contig == toCString(contigNames(bamContext)[bamRecord.rID])) {
+                    
+                    bool both_pos = annotation.strand == '+' and not hasFlagRC(bamRecord);
+                    bool both_neg = annotation.strand == '-' and hasFlagRC(bamRecord);
+                    
+                    // both on the same strand
+                    if (both_pos or both_neg) {
+                        
+                        int32_t overlap = range_overlap(bamRecord.beginPos, 
+                                                        bamRecord.beginPos + length(bamRecord.seq),
+                                                        annotation.start, 
+                                                        annotation.end);
+                                                        
+                        if (overlap > MIN_OVERLAP) {
+                            labels.push_back(annotation.aro);
+                        }
+                    }
+                }
+            }
+            // sort and find unique AROs in labels due gff duplication issue wit RGI
+            std::sort(labels.begin(), labels.end());
+            labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
+            
+            // print the labels
+            if (labels.size() == 0) {
+                labels_fh << bamRecord.qName << ": no label" << std::endl;
+            }
+            else {
+                labels_fh << bamRecord.qName << ": ";
+                for (std::vector<std::string>::const_iterator i = labels.begin(); i != labels.end(); ++i){
+                    labels_fh << *i << ' ';
+                }
+                labels_fh << std::endl;
+
+            
+            }
+        }
+    }
+    
+    
+    catch (Exception const & e) {
+        std::cout << "ERROR: " << e.what() << std::endl;
+        std::exit(1);
+    }
+    
+    labels_fh.close();
+    
+}
+
+int32_t range_overlap(uint32_t annot_start, uint32_t annot_end, 
+                       uint32_t read_loc_start, uint32_t read_loc_end){
+ 
+    std::vector<uint32_t> annot_range;
+    for (uint32_t i = annot_start; i <= annot_end; ++i) {
+        annot_range.push_back(i);
+    }
+
+    std::vector<uint32_t> read_loc_range;
+    for (uint32_t i = read_loc_start; i <= read_loc_end; ++i) {
+        read_loc_range.push_back(i);
+    }
+    
+    std::vector<uint32_t> range_intersection;
+ 
+    std::set_intersection(annot_range.begin(), annot_range.end(),
+                          read_loc_range.begin(), read_loc_range.end(),
+                          std::back_inserter(range_intersection));
+    
+    // overlap is 1 too big...
+    return range_intersection.size() - 1;
+
 }
 
 std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_list) {
 
     std::vector<AMR_annotation> annotations;
+    
+    for (auto &gff_fp : gff_list){
 
-    for(uint32_t i = 0; i < length(gff_list); ++i){
-        GffFileIn gffFileIn;
-        if (!open(gffFileIn, toCString(gff_list[i]))) {
-            std::cerr << "ERROR: Could not open file: " << gff_list[i] << std::endl;
-            exit(1);
+        seqan::GffFileIn gffFileIn;
+        if (!open(gffFileIn, toCString(gff_fp))) {
+            std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
+            std::exit(1);
         }
 
-        GffRecord gffRecord;
+        seqan::GffRecord gffRecord;
         std::string aro;
 
         while (!atEnd(gffFileIn)) {
@@ -177,15 +274,20 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_li
                 readRecord(gffRecord, gffFileIn);
 
                 aro = "";
-
-                for (unsigned i = 0; i < length(gffRecord.tagValues[1]); ++i) {
+                
+                for (uint32_t i = 0; i < length(gffRecord.tagValues[1]); ++i) {
                     if (gffRecord.tagValues[1][i] == ','){
                         break;
                     }
                     aro.push_back(gffRecord.tagValues[1][i]);
                 }
-
-                AMR_annotation annotation {toCString(gffRecord.ref),
+                
+                // truncate the gff suffix from the contig name
+                std::string contig_name = seqan::toCString(gffRecord.ref);
+                contig_name = contig_name.substr(0, contig_name.find("_"));
+                
+                // build annotation data together
+                AMR_annotation annotation {contig_name,
                                            aro,
                                            gffRecord.beginPos,
                                            gffRecord.endPos,
@@ -194,7 +296,8 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_li
                 annotations.push_back(annotation);
 
             }
-            catch (ParseError e) {
+            // necessary for \r and \n endline chars?
+            catch (ParseError const & e) {
                 break;
             }
         }
@@ -208,27 +311,28 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
     // Copy the genomes up to necessary numbers into the artifical
     // metagenome contigs
 
-    StringSet<CharString> ids;
-    StringSet<Dna5String> seqs;
+    seqan::StringSet<CharString> ids;
+    seqan::StringSet<Dna5String> seqs;
 
     // read each genome in list and 'amplify' for relative abundance
-    for(uint32_t i = 0; i < length(genome_list); ++i){
+    for(uint32_t genome_ix = 0; genome_ix < length(genome_list); ++genome_ix){
 
-        SeqFileIn seqFileIn;
-        if (!open(seqFileIn, toCString(genome_list[i]))) {
-            std::cerr << "ERROR: Could not open file: " << genome_list[i] << std::endl;
+        seqan::SeqFileIn seqFileIn;
+        if (!open(seqFileIn, seqan::toCString(genome_list[genome_ix]))) {
+            std::cerr << "ERROR: Could not open file: " << genome_list[genome_ix] << std::endl;
             exit(1);
         }
 
-        StringSet<CharString> temp_ids;
-        StringSet<Dna5String> temp_seqs;
+        seqan::StringSet<CharString> temp_ids;
+        seqan::StringSet<Dna5String> temp_seqs;
 
         readRecords(temp_ids, temp_seqs, seqFileIn);
 
         // append the sequences as many times as the relative abundance
         // implies i.e. if its 3, copy the sequences 3x into the master
         // metagenome fasta
-        for(uint32_t j = 0; j < abundance_list[i]; ++j){
+        // append the copy number to the id as a suffix to prevent sam parsing errors
+        for(uint32_t copy_number = 0; copy_number < abundance_list[genome_ix]; ++copy_number){
             append(ids, temp_ids);
             append(seqs, temp_seqs);
         }
@@ -237,8 +341,8 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
 
     // dump artificial metagenome to single fasta file
     std::string metagenome_fp = output_name + "metagenome.fasta";
-    SeqFileOut seqFileOut;
-    if (!open(seqFileOut, toCString(metagenome_fp))) {
+    seqan::SeqFileOut seqFileOut;
+    if (!open(seqFileOut, seqan::toCString(metagenome_fp))) {
             std::cerr << "ERROR: Could not open file: temp_metagenome.fasta" << std::endl;
             exit(1);
     }
@@ -253,14 +357,14 @@ uint32_t count_nucleotides(std::string combined_genome_fp){
     // read a fasta and count the nucleotides
     int nt_count = 0;
 
-    SeqFileIn seqFileIn;
-    if (!open(seqFileIn, toCString(combined_genome_fp))) {
+    seqan::SeqFileIn seqFileIn;
+    if (!open(seqFileIn, seqan::toCString(combined_genome_fp))) {
         std::cerr << "ERROR: Could not open file: " << combined_genome_fp << std::endl;
         exit(1);
     }
 
-    CharString id;
-    Dna5String seq;
+    seqan::CharString id;
+    seqan::Dna5String seq;
     while (!atEnd(seqFileIn)){
         readRecord(id, seq, seqFileIn);
         nt_count += length(seq);
@@ -283,10 +387,7 @@ uint32_t estimate_read_depth(std::string combined_genome_fp,
     uint32_t read_number = static_cast<int>(read_number_float);
 
     return read_number;
-
 }
-
-
 
 std::vector<std::string> split(std::string str, char delimiter) {
     // split a string on a specific delimiter
