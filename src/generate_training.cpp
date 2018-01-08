@@ -15,7 +15,6 @@
 
 #define MIN_OVERLAP 50
 
-
 std::ostream &operator<<(std::ostream &os, AMR_annotation const &m) { 
     // Overload the output stream operator for annotation class
     // to dump the attributes
@@ -28,14 +27,13 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
                                                       char** argv){
     // Build argument parser and store parsed arguments 
     // in an instance of the Options class
-    
     seqan::ArgumentParser parser("generate_training");
 
     setShortDescription(parser, "Synthetic Metagenomes Generator");
 
     setVersion(parser, AMRtime_VERSION);
 
-    addUsageLine(parser, "[\\fIOPTIONS] \\fIGENOME_LIST\f \\fIANNOTATION_LIST\f \\fIABUNDANCE_LIST\f");
+    addUsageLine(parser, "[\\fIOPTIONS] \\fIGENOMELIST\f \\fIANNOTATIONLIST\f \\fIABUNDANCELIST\f");
 
     addDescription(
             parser,
@@ -52,6 +50,11 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
         seqan::ArgParseArgument::STRING, "abundances"));
 
     addOption(parser, seqan::ArgParseOption(
+        "a", "annotation_type", "File type of RGI annotations [gff, rgi_tsv]",
+        seqan::ArgParseOption::STRING, "annotation_type"));
+    setDefaultValue(parser, "annotation_type", "rgi_tsv");
+
+    addOption(parser, seqan::ArgParseOption(
         "c", "coverage", "Required coverage for metagenome",
         seqan::ArgParseOption::INTEGER, "coverage"));
     setDefaultValue(parser, "coverage", 1);
@@ -59,7 +62,7 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     addOption(parser, seqan::ArgParseOption(
         "r", "read_length", "length of reads to simulate",
         seqan::ArgParseOption::INTEGER, "read_length"));
-    setDefaultValue(parser, "read_length", 150);
+    setDefaultValue(parser, "read_length", 250);
 
     addOption(parser, seqan::ArgParseOption(
         "o", "output_name", "output file name",
@@ -97,6 +100,7 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     getOptionValue(options.coverage, parser, "coverage");
     getOptionValue(options.read_length, parser, "read_length");
     getOptionValue(options.output_name, parser, "output_name");
+    getOptionValue(options.annotation_type, parser, "annotation_type");
 
     return seqan::ArgumentParser::PARSE_OK;
 }
@@ -149,17 +153,17 @@ int main(int argc, char *argv[]){
        << " --illumina-prob-insert 0 --illumina-prob-deletion 0 --illumina-prob-mismatch-scale 0"
        << " --illumina-prob-mismatch 0 --illumina-prob-mismatch-begin 0 --illumina-prob-mismatch-end 0"
        << " 2> /dev/null" << std::endl;
-       
-       
+    
     system(ss.str().c_str());
     
-    std::cout << "Parsing GFF annotations: ";
+    std::cout << "Parsing annotations: ";
     for(it = options.annotations.begin(); it != options.annotations.end(); ++it) {
         std::cout << *it << " ";
     }
     std::cout << std::endl << std::endl;
 
-    std::vector<AMR_annotation> amr_annotations = read_amr_annotations(options.annotations);
+    std::vector<AMR_annotation> amr_annotations = read_amr_annotations(options.annotations,
+                                                                       options.annotation_type);
     
     std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
     create_labels(amr_annotations, simulated_sam_fp, options.output_name);
@@ -182,6 +186,9 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
             
     std::ofstream labels_fh;
     labels_fh.open (output_name + ".labels");
+
+    std::ofstream overlaps_fh;
+    overlaps_fh.open (output_name + ".overlaps");
     
     try {
         // Copy header.
@@ -202,6 +209,7 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
             
             // create a vector of labels
             std::vector<std::string> labels {};
+            std::vector<uint32_t> overlaps {};
             
             // by checking all the annotations
             for (auto &annotation : annotations){
@@ -222,6 +230,7 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
                                                         
                         if (overlap > MIN_OVERLAP) {
                             labels.push_back(annotation.aro);
+                            overlaps.push_back(overlap); 
                         }
                     }
                 }
@@ -234,12 +243,20 @@ void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
             if (labels.size() == 0) {
                 labels_fh << "NONE" << std::endl;
             }
+            if (labels.size() == 0) {
+                overlaps_fh << "0" << std::endl;
+            }
             else {
                 //labels_fh << bamRecord.qName << ": ";
                 for (std::vector<std::string>::const_iterator i = labels.begin(); i != labels.end(); ++i){
                     labels_fh << *i << ' ';
                 }
                 labels_fh << std::endl;
+                
+                for (std::vector<uint32_t>::const_iterator i = overlaps.begin(); i != overlaps.end(); ++i){
+                    overlaps_fh << *i << ' ';
+                }
+                overlaps_fh << std::endl;
             }
         }
     }
@@ -278,60 +295,95 @@ int32_t range_overlap(uint32_t annot_start, uint32_t annot_end,
 
 }
 
-std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_list) {
+std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_list, 
+                                                 std::string annotation_type) {
 
     std::vector<AMR_annotation> annotations;
     
-    for (auto &gff_fp : gff_list){
+    // if gff files then use the gff parser
+    if(annotation_type == "gff"){
 
-        seqan::GffFileIn gffFileIn;
-        if (!open(gffFileIn, seqan::toCString(gff_fp))) {
-            std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
-            std::exit(1);
-        }
+        for (auto &gff_fp : file_list){
 
-        seqan::GffRecord gffRecord;
-        std::string aro;
+            seqan::GffFileIn gffFileIn;
+            if (!open(gffFileIn, seqan::toCString(gff_fp))) {
+                std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
+                std::exit(1);
+            }
 
-        while (!atEnd(gffFileIn)) {
-            try {
-                readRecord(gffRecord, gffFileIn);
+            seqan::GffRecord gffRecord;
+            std::string aro;
 
-                aro = "";
-                
-                for (uint32_t i = 0; i < length(gffRecord.tagValues[1]); ++i) {
-                    if (gffRecord.tagValues[1][i] == ','){
-                        break;
+            while (!atEnd(gffFileIn)) {
+                try {
+                    readRecord(gffRecord, gffFileIn);
+
+                    aro = "";
+                    
+                    for (uint32_t i = 0; i < length(gffRecord.tagValues[1]); ++i) {
+                        if (gffRecord.tagValues[1][i] == ','){
+                            break;
+                        }
+                        aro.push_back(gffRecord.tagValues[1][i]);
                     }
-                    aro.push_back(gffRecord.tagValues[1][i]);
+                    
+                    // truncate the gff suffix from the contig name
+                    std::string contig_name = seqan::toCString(gffRecord.ref);
+                    contig_name = contig_name.substr(0, contig_name.find("_"));
+                    
+                    // build annotation data together
+                    AMR_annotation annotation {contig_name,
+                                               aro,
+                                               gffRecord.beginPos,
+                                               gffRecord.endPos,
+                                               gffRecord.strand};
+
+                    annotations.push_back(annotation);
+
                 }
-                
-                // truncate the gff suffix from the contig name
-                std::string contig_name = seqan::toCString(gffRecord.ref);
-                contig_name = contig_name.substr(0, contig_name.find("_"));
-                
-                // build annotation data together
-                AMR_annotation annotation {contig_name,
-                                           aro,
-                                           gffRecord.beginPos,
-                                           gffRecord.endPos,
-                                           gffRecord.strand};
-
-                annotations.push_back(annotation);
-
+                // necessary for \r and \n endline chars?
+                catch (seqan::ParseError const & e) {
+                    break;
+                }
             }
-            // necessary for \r and \n endline chars?
-            catch (seqan::ParseError const & e) {
-                break;
-            }
-        }
+        }    
    }
+   
+   // if using the custom rgi TSV with the 
+   if(annotation_type == "rgi_tsv"){
+        for (auto &tsv_fp : file_list){
+            
+            seqan::GffFileIn gffFileIn;
+            if (!open(gffFileIn, seqan::toCString(tsv_fp))) {
+                std::cerr << "ERROR: Could not open file: " << tsv_fp << std::endl;
+                std::exit(1);
+            }
+
+
+   //     
+   //         AMR_annotation annotation {contig_name,
+   //                                     aro,
+   //                                     begin_pos,
+   //                                     end_pos,
+   //                                     strand};
+
+   //         annotations.push_back(annotation);
+
+   //                                        
+   }
+   }
+
+   else {
+         std::cerr << "ERROR: invalid annotation type: " << annotation_type << std::endl;
+          exit(1);
+   }
+
    return annotations;
 }
 
 std::string prepare_metagenome(std::vector<std::string> genome_list,
                                std::vector<uint32_t> abundance_list,
-                               std::string output_name){
+                               std::string output_name) {
     // Copy the genomes up to necessary numbers into the artifical
     // metagenome contigs
 
@@ -364,7 +416,7 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
     }
 
     // dump artificial metagenome to single fasta file
-    std::string metagenome_fp = output_name + "_metagenome.fasta";
+    std::string metagenome_fp = output_name + "metagenome.fasta";
     seqan::SeqFileOut seqFileOut;
     if (!open(seqFileOut, seqan::toCString(metagenome_fp))) {
             std::cerr << "ERROR: Could not open file: temp_metagenome.fasta" << std::endl;
