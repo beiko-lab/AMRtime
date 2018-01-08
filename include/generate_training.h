@@ -11,6 +11,7 @@ class Options {
         uint32_t read_length;
         std::string output_name;
         std::string annotation_type;
+        std::string art_error_profile;
         
 };
 
@@ -70,12 +71,5 @@ uint32_t count_nucleotides(std::string fasta_fp);
 
 void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
                    std::string output_name);
-
-uint32_t estimate_read_depth(std::string combined_genome_fp,
-                             uint32_t coverage_fold,
-                             uint32_t read_length);
-
-
-
 
 #endif // #ifndef GENERATE_TRAINING_H_

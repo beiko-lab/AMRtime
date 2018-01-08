@@ -55,6 +55,11 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     setDefaultValue(parser, "annotation_type", "rgi_tsv");
 
     addOption(parser, seqan::ArgParseOption(
+        "e", "art_error_profile", "Read error profile [MSv3, HS25]",
+        seqan::ArgParseOption::STRING, "art_error_profile"));
+    setDefaultValue(parser, "art_error_profile", "MSv3");
+
+    addOption(parser, seqan::ArgParseOption(
         "c", "coverage", "Required coverage for metagenome",
         seqan::ArgParseOption::INTEGER, "coverage"));
     setDefaultValue(parser, "coverage", 1);
@@ -100,6 +105,7 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     getOptionValue(options.coverage, parser, "coverage");
     getOptionValue(options.read_length, parser, "read_length");
     getOptionValue(options.output_name, parser, "output_name");
+    getOptionValue(options.art_error_profile, parser, "art_error_profile");
     getOptionValue(options.annotation_type, parser, "annotation_type");
 
     return seqan::ArgumentParser::PARSE_OK;
@@ -134,28 +140,27 @@ int main(int argc, char *argv[]){
                                                    options.output_name);
 
     
-    // Determine how many reads we need to create to get the approximate
-    // coverage specified
-    uint32_t read_number = estimate_read_depth(metagenome_fp,
-                                               options.coverage,
-                                               options.read_length);
-    
     // Simulate the reads themselves using mason and a system call
     std::cout << "Simulating Illumina Reads: " << options.read_length << "bp " 
-        << read_number << " reads" << std::endl << std::endl;
+        << options.coverage << "X coverage " << std::endl << std::endl;
     std::stringstream ss;
     std::string simulated_sam_fp = options.output_name + ".sam";
+    std::string errfree_simulated_sam_fp = options.output_name + "_errFree.sam";
     
-    // run mason with no sequencing errors for now
-    ss << "mason_simulator -ir " << metagenome_fp << " -n " << read_number << " -oa " 
-       << simulated_sam_fp << " -o " << options.output_name + ".fq" 
-       << " --illumina-read-length " << options.read_length 
-       << " --illumina-prob-insert 0 --illumina-prob-deletion 0 --illumina-prob-mismatch-scale 0"
-       << " --illumina-prob-mismatch 0 --illumina-prob-mismatch-begin 0 --illumina-prob-mismatch-end 0"
-       << " 2> /dev/null" << std::endl;
-    
+
+    // run art simulator with and without MiSeq error profiles
+    ss << "art_illumina -q -na -ef -sam -ss " << options.art_error_profile 
+        << " -i " << metagenome_fp << " -l " << options.read_length 
+        << " -f " <<  options.coverage << " -o " << options.output_name 
+        << " 2> /dev/null" << std::endl;
     system(ss.str().c_str());
-    
+    ss.clear();
+
+    // get the error free reads using picard as art doesn't output
+    ss << "java -jar picard.jar SamToFastq I=" << errfree_simulated_sam_fp << 
+        " FASTQ=" << options.output_name + "_errFree.fq 2> /dev/null" << std::endl;
+    system(ss.str().c_str());
+
     std::cout << "Parsing annotations: ";
     for(it = options.annotations.begin(); it != options.annotations.end(); ++it) {
         std::cout << *it << " ";
@@ -165,8 +170,9 @@ int main(int argc, char *argv[]){
     std::vector<AMR_annotation> amr_annotations = read_amr_annotations(options.annotations,
                                                                        options.annotation_type);
     
+    // get labels for error free for now
     std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
-    create_labels(amr_annotations, simulated_sam_fp, options.output_name);
+    create_labels(amr_annotations, errfree_simulated_sam_fp, options.output_name);
 
     return 0;
 }
@@ -447,22 +453,6 @@ uint32_t count_nucleotides(std::string combined_genome_fp){
     }
 
     return nt_count;
-}
-
-
-uint32_t estimate_read_depth(std::string combined_genome_fp,
-                             uint32_t coverage_fold,
-                             uint32_t read_length){
-    // Calculate the necessary read number for a specified read depth
-
-    uint32_t nt_count = count_nucleotides(combined_genome_fp);
-
-
-    double read_number_float = (coverage_fold * nt_count) / read_length;
-
-    uint32_t read_number = static_cast<int>(read_number_float);
-
-    return read_number;
 }
 
 std::vector<std::string> split(std::string str, char delimiter) {
