@@ -107,7 +107,6 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     getOptionValue(options.output_name, parser, "output_name");
     getOptionValue(options.art_error_profile, parser, "art_error_profile");
     getOptionValue(options.annotation_type, parser, "annotation_type");
-
     return seqan::ArgumentParser::PARSE_OK;
 }
 
@@ -141,25 +140,26 @@ int main(int argc, char *argv[]){
 
     
     // Simulate the reads themselves using mason and a system call
-    std::cout << "Simulating Illumina Reads: " << options.read_length << "bp " 
-        << options.coverage << "X coverage " << std::endl << std::endl;
-    std::stringstream ss;
+    std::cout << "Simulating Reads: " << options.read_length << "bp " 
+        << options.coverage << "X coverage " << options.art_error_profile 
+        << " error profile" << std::endl << std::endl;
     std::string simulated_sam_fp = options.output_name + ".sam";
     std::string errfree_simulated_sam_fp = options.output_name + "_errFree.sam";
     
 
     // run art simulator with and without MiSeq error profiles
-    ss << "art_illumina -q -na -ef -sam -ss " << options.art_error_profile 
+    std::stringstream art_cmd;
+    art_cmd << "art_illumina -q -na -ef -sam -ss " << options.art_error_profile 
         << " -i " << metagenome_fp << " -l " << options.read_length 
         << " -f " <<  options.coverage << " -o " << options.output_name 
-        << " 2> /dev/null" << std::endl;
-    system(ss.str().c_str());
-    ss.clear();
+        << " 2>&1 > /dev/null" << std::endl;
+    system(art_cmd.str().c_str());
 
-    // get the error free reads using picard as art doesn't output
-    ss << "java -jar picard.jar SamToFastq I=" << errfree_simulated_sam_fp << 
-        " FASTQ=" << options.output_name + "_errFree.fq 2> /dev/null" << std::endl;
-    system(ss.str().c_str());
+    //// get the error free reads using picard as art doesn't output
+    // std::stringstream picard_cmd;
+    //picard_cmd << "java -jar picard.jar SamToFastq I=" << errfree_simulated_sam_fp << 
+    //    " FASTQ=" << options.output_name + "_errFree.fq 2> /dev/null" << std::endl;
+    //System(picard_cmd.str().c_str());
 
     std::cout << "Parsing annotations: ";
     for(it = options.annotations.begin(); it != options.annotations.end(); ++it) {
@@ -302,13 +302,12 @@ int32_t range_overlap(uint32_t annot_start, uint32_t annot_end,
 }
 
 std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_list, 
-                                                 std::string annotation_type) {
+                                                 seqan::annotation_type) {
 
     std::vector<AMR_annotation> annotations;
     
     // if gff files then use the gff parser
     if(annotation_type == "gff"){
-
         for (auto &gff_fp : file_list){
 
             seqan::GffFileIn gffFileIn;
@@ -346,6 +345,8 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
 
                     annotations.push_back(annotation);
 
+                    // 
+
                 }
                 // necessary for \r and \n endline chars?
                 catch (seqan::ParseError const & e) {
@@ -356,7 +357,7 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
    }
    
    // if using the custom rgi TSV with the 
-   if(annotation_type == "rgi_tsv"){
+   else if(annotation_type == "rgi_tsv"){
         for (auto &tsv_fp : file_list){
             
             seqan::GffFileIn gffFileIn;
@@ -376,9 +377,8 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
    //         annotations.push_back(annotation);
 
    //                                        
+        } 
    }
-   }
-
    else {
          std::cerr << "ERROR: invalid annotation type: " << annotation_type << std::endl;
           exit(1);

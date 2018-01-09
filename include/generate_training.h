@@ -72,4 +72,5 @@ uint32_t count_nucleotides(std::string fasta_fp);
 void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
                    std::string output_name);
 
+
 #endif // #ifndef GENERATE_TRAINING_H_
