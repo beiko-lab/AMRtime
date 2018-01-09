@@ -8,6 +8,8 @@
 #include <seqan/arg_parse.h>
 #include <seqan/sequence.h>
 
+#include "IntervalTree.h"
+
 #include "AMRtimeConfig.h"
 #include "generate_training.h"
 
@@ -345,7 +347,6 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
 
                     annotations.push_back(annotation);
 
-                    // 
 
                 }
                 // necessary for \r and \n endline chars?
@@ -382,6 +383,30 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
    else {
          std::cerr << "ERROR: invalid annotation type: " << annotation_type << std::endl;
           exit(1);
+   }
+
+   // make annotations way more efficient to query when creating labels
+   // by first making a map for each contig to the amr set 
+    std::map<std::string, std::vector<AMR_annotation>> annotation_map;
+   for (auto &annotation : annotations){
+       // check if contig exists in map
+       //if (annotation_map.find(annotation.contig_name) == annotation_map.end()) {
+       annotation_map[annotation.contig_name].push_back(annotation)
+        
+       //}
+
+
+  
+                       // {contig_name -> strand -> interval_tree_for_aro
+                    // k
+                    //
+   }
+   
+   for (auto &contig: annotation_map){
+       std::cout << contig << std::endl;
+       //for (auto &anno: contig) {
+       //     std::cout << anno << std::endl;
+       //}
    }
 
    return annotations;
