@@ -1,6 +1,8 @@
 #ifndef GENERATE_TRAINING_H_
 #define GENERATE_TRAINING_H_
 
+#include "AMR_annotation.h"
+
 class Options {
     // class to contain formatted input options
     public:
@@ -17,6 +19,8 @@ class Options {
 
 class RGI_record {
     // class to contain a record from the RGI TSV format
+    //ORF_ID	Contig	Start	Stop	Orientation	Cut_Off	Pass_Bitscore	Best_Hit_Bitscore	Best_Hit_ARO	Best_Identities	ARO	ARO_name	Model_type	SNP	Best_Hit_ARO_category	ARO_category	Other_hit_bitscores	Predicted_DNA	Predicted_Protein	CARD_Protein_Sequence	ID	Model_ID
+
     public:
         std::string orf_id;
         std::string contig;
@@ -42,18 +46,6 @@ class RGI_record {
         uint32_t model_id;
 };
 
-
-     //ORF_ID	Contig	Start	Stop	Orientation	Cut_Off	Pass_Bitscore	Best_Hit_Bitscore	Best_Hit_ARO	Best_Identities	ARO	ARO_name	Model_type	SNP	Best_Hit_ARO_category	ARO_category	Other_hit_bitscores	Predicted_DNA	Predicted_Protein	CARD_Protein_Sequence	ID	Model_ID
-
-class AMR_annotation {
-    // class to hold ARO annotation from RGI GFF output
-    public:
-        std::string contig;
-        std::string aro;
-        uint32_t start;
-        uint32_t end;
-        char strand;
-};
 
 int32_t range_overlap(uint32_t annot_start, uint32_t annot_end, 
                        uint32_t read_loc_start, uint32_t read_loc_end);

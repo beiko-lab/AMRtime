@@ -12,17 +12,11 @@
 
 #include "AMRtimeConfig.h"
 #include "generate_training.h"
+#include "AMR_annotation.h"
 
 //using namespace seqan;
 
 #define MIN_OVERLAP 50
-
-std::ostream &operator<<(std::ostream &os, AMR_annotation const &m) { 
-    // Overload the output stream operator for annotation class
-    // to dump the attributes
-    return os << " contig: " << m.contig << " aro: " << m.aro 
-            << " start: " << m.start << " end: " << m.end << " strand: " << m.strand;
-}
 
 seqan::ArgumentParser::ParseResult parse_command_line(Options& options, 
                                                       int argc,
@@ -304,7 +298,7 @@ int32_t range_overlap(uint32_t annot_start, uint32_t annot_end,
 }
 
 std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_list, 
-                                                 seqan::annotation_type) {
+                                                 std::string annotation_type) {
 
     std::vector<AMR_annotation> annotations;
     
@@ -387,29 +381,45 @@ std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> file_l
 
    // make annotations way more efficient to query when creating labels
    // by first making a map for each contig to the amr set 
-    std::map<std::string, std::vector<AMR_annotation>> annotation_map;
+   std::map<std::string, std::vector<AMR_annotation>> annotation_map;
    for (auto &annotation : annotations){
-       // check if contig exists in map
-       //if (annotation_map.find(annotation.contig_name) == annotation_map.end()) {
-       annotation_map[annotation.contig_name].push_back(annotation)
-        
-       //}
+       // check if contig already exists in map for that annotation
+       // if it doesn't create a new contig key: and [annotation] 
+       if (annotation_map.find(annotation.contig) == annotation_map.end()) {
 
-
-  
-                       // {contig_name -> strand -> interval_tree_for_aro
-                    // k
-                    //
+           std::vector<AMR_annotation> contig_annotations = {annotation};
+            annotation_map.insert(std::make_pair(annotation.contig, 
+                                                 contig_annotations));
+       }
+       // otherwise append to value vector for that contig key 
+       // but only if its a unique annotation
+       else {
+           // only 
+           if(std::find(annotation_map[annotation.contig].begin(), 
+                        annotation_map[annotation.contig].end(), 
+                        annotation) 
+                   != annotation_map[annotation.contig].end()) {
+                annotation_map[annotation.contig].push_back(annotation);
+           }
+                   
+       }
+       // {contig_name -> strand -> interval_tree_for_aro
+       // k
+       //
    }
-   
-   for (auto &contig: annotation_map){
-       std::cout << contig << std::endl;
-       //for (auto &anno: contig) {
-       //     std::cout << anno << std::endl;
-       //}
-   }
 
-   return annotations;
+   //for (auto const& dict: annotation_map){
+   //     std::cout << dict.first << ':';
+
+   //     for (auto &anno: dict.second) {
+   //         std::cout << anno << std::endl;
+   //    }
+   //     std::cout << std::endl << std::endl;
+   //     std::cout << "#" << dict.first << " " << dict.second.size() << std::endl; 
+   // }
+    
+    // 22s without new dict
+    return annotations;
 }
 
 std::string prepare_metagenome(std::vector<std::string> genome_list,
