@@ -1,7 +1,9 @@
 #ifndef GENERATE_TRAINING_H_
 #define GENERATE_TRAINING_H_
 
-#include "AMR_annotation.h"
+// ===========================================================================
+// Classes
+// ===========================================================================
 
 class Options {
     // class to contain formatted input options
@@ -31,12 +33,11 @@ class RGI_record {
         double pass_bitscore;
         double best_hit_bitscore;
         std::string best_hit_aro;
-        double best_identity;
+        double best_identities;
         std::vector<std::string> aro;
         std::vector<std::string> aro_name;
         std::string model_type;
-        std::string snp;
-        std::vector<std::string> best_hit_aro_category;
+        std::string snp_best_hit_aro_category;
         std::string aro_category; 
         std::vector<std::string> other_hit_bitscores;
         std::string predicted_DNA;
@@ -46,12 +47,34 @@ class RGI_record {
         uint32_t model_id;
 };
 
+class AMR_annotation {
+    // class to hold ARO annotation from RGI GFF output
+    public:
+        std::string contig;
+        std::string aro;
+        std::string amr_name;
+        std::string cutoff;
+        uint32_t start;
+        uint32_t end;
+        char strand;
+};
+
+// ===========================================================================
+// Typedefs
+// ===========================================================================
+
+typedef std::map<std::string, std::vector<AMR_annotation>> TAnnotationMap;
+
+// ===========================================================================
+// Functions
+// ===========================================================================
 
 int32_t range_overlap(uint32_t annot_start, uint32_t annot_end, 
                        uint32_t read_loc_start, uint32_t read_loc_end);
 
-std::vector<AMR_annotation> read_amr_annotations(std::vector<std::string> gff_list,
-                                                 std::string annotation_type);
+TAnnotationMap read_amr_annotations(
+        std::vector<std::string> gff_list,
+       std::string annotation_type);
 
 std::vector<std::string> split(std::string str, char delimiter);
 
@@ -61,8 +84,9 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
 
 uint32_t count_nucleotides(std::string fasta_fp); 
 
-void create_labels(std::vector<AMR_annotation> annotations, std::string sam_fp,
+void create_labels(TAnnotationMap annotations, 
+                     std::string sam_fp,
                    std::string output_name);
 
-
+uint32_t stoui32(const std::string& s);
 #endif // #ifndef GENERATE_TRAINING_H_
