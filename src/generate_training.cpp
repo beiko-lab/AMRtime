@@ -12,7 +12,6 @@
 #include "AMRtimeConfig.h"
 #include "generate_training.h"
 
-#define MIN_OVERLAP 50
 #define RANDOM_SEED 42
 
 // ===========================================================================
@@ -85,29 +84,42 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
         seqan::ArgParseArgument::STRING, "abundances"));
 
     addOption(parser, seqan::ArgParseOption(
-        "a", "annotation_type", "File type of RGI annotations [gff, rgi_tsv]",
+        "a", "annotation_type", "File type of RGI annotations.",
         seqan::ArgParseOption::STRING, "annotation_type"));
+    setValidValues(parser, "annotation_type", "gff rgi_tsv");
     setDefaultValue(parser, "annotation_type", "rgi_tsv");
 
     addOption(parser, seqan::ArgParseOption(
-        "e", "art_error_profile", "Read error profile [MSv3, HS25]",
+        "e", "art_error_profile", "Read error profile.",
         seqan::ArgParseOption::STRING, "art_error_profile"));
-    setDefaultValue(parser, "art_error_profile", "MSv3");
+    setValidValues(parser, "art_error_profile", "MSv3 HS25");
+    setDefaultValue(parser, "art_error_profile", "HS25");
 
     addOption(parser, seqan::ArgParseOption(
-        "c", "coverage", "Required coverage for metagenome",
+        "c", "coverage", "Required coverage for metagenome.",
         seqan::ArgParseOption::INTEGER, "coverage"));
+    setMinValue(parser, "coverage", "1");
     setDefaultValue(parser, "coverage", 1);
-
+    
+    // as 150 is the max length for HiSeq error profile again
+    // should be a dependency in the limits for theses
     addOption(parser, seqan::ArgParseOption(
-        "r", "read_length", "length of reads to simulate",
+        "r", "read_length", "Length of reads to simulate.",
         seqan::ArgParseOption::INTEGER, "read_length"));
-    setDefaultValue(parser, "read_length", 250);
+    setMinValue(parser, "read_length", "33");
+    setDefaultValue(parser, "read_length", 150);
 
     addOption(parser, seqan::ArgParseOption(
-        "o", "output_name", "output file name",
+        "o", "output_name", "Output file name.",
         seqan::ArgParseOption::STRING, "output_name"));
     setDefaultValue(parser, "output_name", "output");
+    
+    // in theory read length should be the maximum which is currently not set
+    addOption(parser, seqan::ArgParseOption(
+        "m", "minimum_overlap", "Minimum annotation overlap to label.",
+        seqan::ArgParseOption::INTEGER, "min_overlap"));
+    setMinValue(parser, "minimum_overlap", "1");
+    setDefaultValue(parser, "minimum_overlap", 50);
 
     seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
 
@@ -142,6 +154,7 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
     getOptionValue(options.output_name, parser, "output_name");
     getOptionValue(options.art_error_profile, parser, "art_error_profile");
     getOptionValue(options.annotation_type, parser, "annotation_type");
+    getOptionValue(options.minimum_overlap, parser, "minimum_overlap");
     return seqan::ArgumentParser::PARSE_OK;
 }
 
@@ -341,7 +354,8 @@ uint32_t stoui32(const std::string& s) {
 
 void createLabels(TAnnotationMap annotations, 
                   std::string sam_fp, 
-                  std::string output_name){
+                  std::string output_name,
+                  uint32_t minimum_overlap){
     
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn;
@@ -390,7 +404,7 @@ void createLabels(TAnnotationMap annotations,
                                                        annotation.end,
                                                        bam_record.beginPos, 
                                                        bam_record.beginPos + length(bam_record.seq));
-                        if (overlap > MIN_OVERLAP) {
+                        if (overlap > minimum_overlap) {
                             labels.push_back(annotation.aro);
                             overlaps.push_back(overlap); 
                         }
@@ -519,7 +533,8 @@ int generateTraining(int argc, char *argv[]){
     
     // get labels for error free for now
     std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
-    createLabels(amr_annotations, errfree_simulated_sam_fp, options.output_name);
+    createLabels(amr_annotations, errfree_simulated_sam_fp, 
+                 options.output_name, options.minimum_overlap);
 
     return 0;
 }

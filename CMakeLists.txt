@@ -33,6 +33,7 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 # set CMAKE C++ flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} -DSEQAN_DISABLE_VERSION_CHECK=YES")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # add subdirectory cmakelists
 add_subdirectory(src)

@@ -23,7 +23,7 @@ class GenerateOptions {
         std::string output_name;
         std::string annotation_type;
         std::string art_error_profile;
-        
+        uint32_t minimum_overlap;
 };
 
 // currently not used but will need later possible
@@ -92,7 +92,8 @@ std::string prepareMetagenome(TStrList genome_list,
 
 void createLabels(TAnnotationMap annotations, 
                    std::string sam_fp,
-                   std::string output_name);
+                   std::string output_name,
+                   uint32_t minimum_overlap);
 
 uint32_t stoui32(const std::string& s);
 
