@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <stdexcept>
 
 #include <seqan/seq_io.h>
 #include <seqan/bam_io.h>
@@ -18,7 +19,7 @@
 // Overwritten operators for class
 // ===========================================================================
 
-std::ostream& operator<< (std::ostream &out, const AMR_annotation &annotation){
+std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation){
     // to dump the attributes
     return out << "contig: " << annotation.contig << ", aro: " << annotation.aro 
             << ", amr_name: " << annotation.amr_name << ", cutoff: " << annotation.cutoff
@@ -26,7 +27,7 @@ std::ostream& operator<< (std::ostream &out, const AMR_annotation &annotation){
             << ", strand: " << annotation.strand;
 };
 
-bool operator== (AMR_annotation &first, const AMR_annotation &other ) {
+bool operator== (AmrAnnotation &first, const AmrAnnotation &other ) {
         bool comparison[7] = {first.contig == other.contig,
                               first.aro == other.aro,
                               first.amr_name == other.amr_name,
@@ -51,12 +52,12 @@ bool operator== (AMR_annotation &first, const AMR_annotation &other ) {
 // ===========================================================================
 
 // ---------------------------------------------------------------------------
-// Function parse_command_line()
+// Function parseGenerateArgs()
 // ---------------------------------------------------------------------------
 
-seqan::ArgumentParser::ParseResult parse_command_line(Options& options, 
-                                                      int argc,
-                                                      char** argv){
+seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options, 
+                                                     int argc,
+                                                     char** argv){
     // Build argument parser and store parsed arguments 
     // in an instance of the Options class
     seqan::ArgumentParser parser("generate_training");
@@ -64,6 +65,8 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     setShortDescription(parser, "Synthetic Metagenomes Generator");
 
     setVersion(parser, AMRtime_VERSION);
+
+    setDate(parser, "January 2018");
 
     addUsageLine(parser, "[\\fIOPTIONS] \\fIGENOMELIST\f \\fIANNOTATIONLIST\f \\fIABUNDANCELIST\f");
 
@@ -120,7 +123,7 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
     options.annotations = split(temp, ',');
 
     getArgumentValue(temp, parser, 2);
-    std::vector<std::string> abundance_strings = split(temp, ',');
+    TStrList abundance_strings = split(temp, ',');
     for (uint32_t i=0; i<abundance_strings.size(); ++i) {
         uint32_t abundance = std::stoi(abundance_strings.at(i).c_str());
         options.relative_abundances.push_back(abundance);
@@ -146,9 +149,9 @@ seqan::ArgumentParser::ParseResult parse_command_line(Options& options,
 // Function split()
 // ---------------------------------------------------------------------------
 
-std::vector<std::string> split(std::string str, char delimiter) {
+TStrList split(std::string str, char delimiter) {
     // split a string on a specific delimiter
-    std::vector<std::string> split_string;
+    TStrList split_string;
     std::stringstream ss(str);
     std::string fragment;
 
@@ -160,10 +163,10 @@ std::vector<std::string> split(std::string str, char delimiter) {
 }
 
 // ---------------------------------------------------------------------------
-// Function prepare_metagenome()
+// Function prepareMetagenome()
 // ---------------------------------------------------------------------------
 
-std::string prepare_metagenome(std::vector<std::string> genome_list,
+std::string prepareMetagenome(TStrList genome_list,
                                std::vector<uint32_t> abundance_list,
                                std::string output_name) {
     // Copy the genomes up to necessary numbers into the artifical
@@ -212,17 +215,17 @@ std::string prepare_metagenome(std::vector<std::string> genome_list,
 }
 
 // ---------------------------------------------------------------------------
-// Function read_amr_annotations()
+// Function readAmrAnnotations()
 // ---------------------------------------------------------------------------
-TAnnotationMap read_amr_annotations(
-        std::vector<std::string> file_list, 
+TAnnotationMap readAmrAnnotations(
+        TStrList annotation_fps, 
         std::string annotation_type) {
 
-    std::vector<AMR_annotation> annotations;
+    std::vector<AmrAnnotation> annotations;
     
     // if gff files then use the gff parser
     if(annotation_type == "gff"){
-        for (auto &gff_fp : file_list){
+        for (auto &gff_fp : annotation_fps){
 
             seqan::GffFileIn gffFileIn;
             if (!open(gffFileIn, seqan::toCString(gff_fp))) {
@@ -230,35 +233,35 @@ TAnnotationMap read_amr_annotations(
                 std::exit(1);
             }
 
-            seqan::GffRecord gffRecord;
+            seqan::GffRecord gff_record;
             std::string aro;
 
             while (!atEnd(gffFileIn)) {
                 try {
-                    readRecord(gffRecord, gffFileIn);
+                    readRecord(gff_record, gffFileIn);
 
                     aro = "";
                     
-                    for (uint32_t i = 0; i < length(gffRecord.tagValues[1]); ++i) {
-                        if (gffRecord.tagValues[1][i] == ','){
+                    for (uint32_t i = 0; i < length(gff_record.tagValues[1]); ++i) {
+                        if (gff_record.tagValues[1][i] == ','){
                             break;
                         }
-                        aro.push_back(gffRecord.tagValues[1][i]);
+                        aro.push_back(gff_record.tagValues[1][i]);
                     }
                     
                     // truncate the gff suffix from the contig name
-                    std::string contig_name = seqan::toCString(gffRecord.ref);
+                    std::string contig_name = seqan::toCString(gff_record.ref);
                     contig_name = contig_name.substr(0, contig_name.find("_"));
                     
                     // build annotation data together
                     // amr_name and cut-off not supported for this 
-                    AMR_annotation annotation {contig_name,
+                    AmrAnnotation annotation {contig_name,
                                                aro,
                                                "unsupported", 
                                                "unsupported", 
-                                               gffRecord.beginPos,
-                                               gffRecord.endPos,
-                                               gffRecord.strand};
+                                               gff_record.beginPos,
+                                               gff_record.endPos,
+                                               gff_record.strand};
 
                     annotations.push_back(annotation);
 
@@ -274,10 +277,10 @@ TAnnotationMap read_amr_annotations(
    
    // if using the custom rgi TSV with the 
    else if(annotation_type == "rgi_tsv"){
-        for (auto &tsv_fp : file_list){
+        for (auto &tsv_fp : annotation_fps){
 
             std::string line;
-            std::vector<std::string> split_line;
+            TStrList split_line;
             std::ifstream tsv_fh (tsv_fp);
             if (tsv_fh.is_open()){
                 // skip header
@@ -286,7 +289,7 @@ TAnnotationMap read_amr_annotations(
 
                 split_line = split(line, '\t');
                     
-                    AMR_annotation annotation {split(split_line[1], '_')[0],
+                    AmrAnnotation annotation {split(split_line[1], '_')[0],
                                                split_line[10],
                                                split_line[8],
                                                split_line[5],
@@ -312,24 +315,19 @@ TAnnotationMap read_amr_annotations(
    for (auto &annotation : annotations){
        annotation_map[annotation.contig].push_back(annotation);
    }
-   
-   if (debug == true) {
-        for (auto const& dict: annotation_map){
-            std::cout << dict.first << ": [" << std::endl;
 
-            for (auto &anno: dict.second) {
-                std::cout << anno << std::endl;
-            }
-            std::cout << "]" << std::endl << std::endl;
-        }
-   }
    return annotation_map;
 }
 
 // ---------------------------------------------------------------------------
 // Function stoui32()
 // ---------------------------------------------------------------------------
+
 uint32_t stoui32(const std::string& s) {
+    // make sure it isn't negative for some reason
+    if(s[0] == '-'){
+        throw std::invalid_argument("Received negative value");
+    }
     std::istringstream reader(s);
     uint32_t val = 0;
     reader >> val;
@@ -338,12 +336,12 @@ uint32_t stoui32(const std::string& s) {
 
 
 // ---------------------------------------------------------------------------
-// Function create_labels()
+// Function createLabels()
 // ---------------------------------------------------------------------------
 
-void create_labels(TAnnotationMap annotations, 
-                   std::string sam_fp, 
-                   std::string output_name){
+void createLabels(TAnnotationMap annotations, 
+                  std::string sam_fp, 
+                  std::string output_name){
     
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn;
@@ -351,9 +349,8 @@ void create_labels(TAnnotationMap annotations,
         std::cerr << "ERROR: Could not open " << sam_fp << std::endl;
         std::exit(1);
     }
+
     // Open output file, BamFileOut accepts also an ostream and a format tag.
-    
-            
     std::ofstream labels_fh;
     labels_fh.open (output_name + ".labels");
 
@@ -366,37 +363,33 @@ void create_labels(TAnnotationMap annotations,
         readHeader(header, bamFileIn);
 
         // read header into queriable context
-        seqan::BamAlignmentRecord bamRecord;
+        seqan::BamAlignmentRecord bam_record;
         typedef seqan::FormattedFileContext<seqan::BamFileIn, void>::Type TBamContext;
         TBamContext const & bamContext = context(bamFileIn);
 
-
-        
         // for every read generated
         while (!atEnd(bamFileIn)) {
-            
-            readRecord(bamRecord, bamFileIn);
+            readRecord(bam_record, bamFileIn);
             
             // create a vector of labels
-            std::vector<std::string> labels {};
+            TStrList labels {};
             std::vector<uint32_t> overlaps {};
             
             // by checking all the annotations
-            for (auto &annotation : annotations[seqan::toCString(contigNames(bamContext)[bamRecord.rID])]){
+            for (auto &annotation : annotations[seqan::toCString(contigNames(bamContext)[bam_record.rID])]){
                 
                 // only check when the annotation's contig is the same as the reads
                 //if (annotation.contig == seqan::toCString(contigNames(bamContext)[bamRecord.rID])) {
-                    
-                    bool both_pos = annotation.strand == '+' and not hasFlagRC(bamRecord);
-                    bool both_neg = annotation.strand == '-' and hasFlagRC(bamRecord);
+                    bool both_pos = annotation.strand == '+' and not hasFlagRC(bam_record);
+                    bool both_neg = annotation.strand == '-' and hasFlagRC(bam_record);
                     
                     // both on the same strand
                     if (both_pos or both_neg) {
                         
-                        int32_t overlap = range_overlap(annotation.start, 
-                                                        annotation.end,
-                                                        bamRecord.beginPos, 
-                                                        bamRecord.beginPos + length(bamRecord.seq));
+                        int32_t overlap = rangeOverlap(annotation.start, 
+                                                       annotation.end,
+                                                       bam_record.beginPos, 
+                                                       bam_record.beginPos + length(bam_record.seq));
                         if (overlap > MIN_OVERLAP) {
                             labels.push_back(annotation.aro);
                             overlaps.push_back(overlap); 
@@ -415,14 +408,13 @@ void create_labels(TAnnotationMap annotations,
                 overlaps_fh << "0" << std::endl;
             }
             else {
-                //labels_fh << bamRecord.qName << ": ";
-                for (std::vector<std::string>::const_iterator i = labels.begin(); i != labels.end(); ++i){
-                    labels_fh << *i << ' ';
+                for (auto &label : labels) {
+                    labels_fh << label << ' ';
                 }
                 labels_fh << std::endl;
                 
-                for (std::vector<uint32_t>::const_iterator i = overlaps.begin(); i != overlaps.end(); ++i){
-                    overlaps_fh << *i << ' ';
+                for (auto &overlap : overlaps){
+                    overlaps_fh << overlap << ' ';
                 }
                 overlaps_fh << std::endl;
             }
@@ -436,15 +428,14 @@ void create_labels(TAnnotationMap annotations,
     }
     
     labels_fh.close();
-    
 }
 
 // ---------------------------------------------------------------------------
-// Function range_overlap()
+// Function rangeOverlap()
 // ---------------------------------------------------------------------------
 
-int32_t range_overlap(uint32_t annot_start, uint32_t annot_end, 
-                      uint32_t read_loc_start, uint32_t read_loc_end){
+int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end, 
+                     uint32_t read_loc_start, uint32_t read_loc_end){
     
     //std::cout << annot_start << " " << annot_end << std::endl;
     //std::cout << read_loc_start << " " << read_loc_end << std::endl;
@@ -453,8 +444,8 @@ int32_t range_overlap(uint32_t annot_start, uint32_t annot_end,
     int maximum = std::min(annot_end, read_loc_end);
 
     if (minimum <= maximum) {
-        //std::cout << maximum - minimum << std::endl;
-        return maximum - minimum;
+        // adding 1 to make it an inclusive range overlap
+        return maximum - minimum + 1;
     }
     else {
         //std::cout << 0 << std::endl;
@@ -463,17 +454,17 @@ int32_t range_overlap(uint32_t annot_start, uint32_t annot_end,
 }
 
 // ==========================================================================
-// Main 
+// Function generateTraining()
 // ==========================================================================
 
-int main(int argc, char *argv[]){
+int generateTraining(int argc, char *argv[]){
     // Create simulated metagenome and label the reads
 
     // Get command line arguments
-    Options options;
-    seqan::ArgumentParser::ParseResult res = parse_command_line(options, 
-                                                                argc, 
-                                                                argv);
+    GenerateOptions options;
+    seqan::ArgumentParser::ParseResult res = parseGenerateArgs(options, 
+                                                               argc, 
+                                                               argv);
 
     if (res != seqan::ArgumentParser::PARSE_OK){
         return res == seqan::ArgumentParser::PARSE_ERROR;
@@ -484,15 +475,14 @@ int main(int argc, char *argv[]){
     // them up to the required copy number to satisfy relative
     // abundances
     std::cout << "Creating Synthetic Metagenome Fasta: ";
-    std::vector<std::string>::iterator it;
-    for(it = options.genomes.begin(); it != options.genomes.end(); ++it) {
-        std::cout << *it << " ";
+    for(auto &genome : options.genomes) {
+        std::cout << genome << " ";
     }
     std::cout << std::endl << std::endl;
 
-    std::string metagenome_fp = prepare_metagenome(options.genomes, 
-                                                   options.relative_abundances,
-                                                   options.output_name);
+    std::string metagenome_fp = prepareMetagenome(options.genomes, 
+                                                  options.relative_abundances,
+                                                  options.output_name);
 
     
     // Simulate the reads themselves using mason and a system call
@@ -519,16 +509,17 @@ int main(int argc, char *argv[]){
     //System(picard_cmd.str().c_str());
 
     std::cout << "Parsing annotations: ";
-    for(it = options.annotations.begin(); it != options.annotations.end(); ++it) {
-        std::cout << *it << " ";
+    for(auto &annotation : options.annotations) {
+        std::cout << annotation << " ";
     }
     std::cout << std::endl << std::endl;
-    TAnnotationMap amr_annotations = read_amr_annotations(options.annotations,
-                                                          options.annotation_type);
+
+    TAnnotationMap amr_annotations = readAmrAnnotations(options.annotations,
+                                                        options.annotation_type);
     
     // get labels for error free for now
     std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
-    create_labels(amr_annotations, errfree_simulated_sam_fp, options.output_name);
+    createLabels(amr_annotations, errfree_simulated_sam_fp, options.output_name);
 
     return 0;
 }

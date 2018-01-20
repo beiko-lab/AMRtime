@@ -21,7 +21,6 @@ configure_file (
     )
 include_directories("${PROJECT_BINARY_DIR}")
 
-
 # dependencies
 set(SEQAN_FIND_DEPENDENCIES ZLIB BZip2)
 find_package(SeqAn REQUIRED)
@@ -32,6 +31,14 @@ add_definitions(${SEQAN_DEFINITIONS})
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
+# set CMAKE C++ flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} -DSEQAN_DISABLE_VERSION_CHECK=YES")
+
 # add subdirectory cmakelists
 add_subdirectory(src)
-#add_subdirectory(test)
+
+# add tests subdirectoy
+if (test)
+  add_subdirectory(src/test)
+  #  add_subdirectory(src/test/test_data)
+endif()
