@@ -41,3 +41,6 @@ CTestTestfile.cmake
 
 # Build dir
 build/
+
+# vim files
+*.sw*
