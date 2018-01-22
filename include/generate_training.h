@@ -101,5 +101,5 @@ int generateTraining(int argc, char *argv[]);
 
 
 std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation);
-bool operator== (AmrAnnotation &first, const AmrAnnotation &other );
+bool operator== (const AmrAnnotation &first, const AmrAnnotation &other);
 #endif // #ifndef GENERATE_TRAINING_H_

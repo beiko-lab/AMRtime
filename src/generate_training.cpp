@@ -20,13 +20,16 @@
 
 std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation){
     // to dump the attributes
-    return out << "contig: " << annotation.contig << ", aro: " << annotation.aro 
-            << ", amr_name: " << annotation.amr_name << ", cutoff: " << annotation.cutoff
-            << ", start: " << annotation.start << ", end: " << annotation.end 
+    return out << "contig: " << annotation.contig 
+            << ", aro: " << annotation.aro 
+            << ", amr_name: " << annotation.amr_name 
+            << ", cutoff: " << annotation.cutoff
+            << ", start: " << annotation.start 
+            << ", end: " << annotation.end 
             << ", strand: " << annotation.strand;
 };
 
-bool operator== (AmrAnnotation &first, const AmrAnnotation &other ) {
+bool operator== (const AmrAnnotation &first, const AmrAnnotation &other) {
         bool comparison[7] = {first.contig == other.contig,
                               first.aro == other.aro,
                               first.amr_name == other.amr_name,
@@ -67,7 +70,8 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
 
     setDate(parser, "January 2018");
 
-    addUsageLine(parser, "[\\fIOPTIONS] \\fIGENOMELIST\f \\fIANNOTATIONLIST\f \\fIABUNDANCELIST\f");
+    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIGENOMELIST\\fP "
+                         "\\fIANNOTATIONLIST\\fP \\fIABUNDANCELIST\\fP");
 
     addDescription(
             parser,
@@ -144,8 +148,9 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
     bool length_ok = (options.genomes.size() == options.annotations.size() && \
             options.annotations.size () == options.relative_abundances.size());
     if (!length_ok) {
-        std::cerr << "ERROR: You must provide the same number of genomes, annotations "
-                  << "(and relative abundances if specified)" << std::endl;
+        std::cerr << "ERROR: You must provide the same number "
+                     "of genomes, annotations and relative abundances "
+                     "if specified)" << std::endl;
         return seqan::ArgumentParser::PARSE_ERROR;
     }
 
@@ -180,8 +185,8 @@ TStrList split(std::string str, char delimiter) {
 // ---------------------------------------------------------------------------
 
 std::string prepareMetagenome(TStrList genome_list,
-                               std::vector<uint32_t> abundance_list,
-                               std::string output_name) {
+                              std::vector<uint32_t> abundance_list,
+                              std::string output_name) {
     // Copy the genomes up to necessary numbers into the artifical
     // metagenome contigs
 
@@ -190,12 +195,9 @@ std::string prepareMetagenome(TStrList genome_list,
 
     // read each genome in list and 'amplify' for relative abundance
     for(uint32_t genome_ix = 0; genome_ix < genome_list.size(); ++genome_ix){
-
-        seqan::SeqFileIn seqFileIn;
-        if (!open(seqFileIn, seqan::toCString(genome_list[genome_ix]))) {
-            std::cerr << "ERROR: Could not open file: " << genome_list[genome_ix] << std::endl;
-            exit(1);
-        }
+        
+        // if you use the constructor it gives appropriate error
+        seqan::SeqFileIn seqFileIn(genome_list[genome_ix].c_str());
 
         seqan::StringSet<seqan::CharString> temp_ids;
         seqan::StringSet<seqan::Dna5String> temp_seqs;
@@ -205,22 +207,30 @@ std::string prepareMetagenome(TStrList genome_list,
         // append the sequences as many times as the relative abundance
         // implies i.e. if its 3, copy the sequences 3x into the master
         // metagenome fasta
-        // append the copy number to the id as a suffix to prevent sam parsing errors
-        for(uint32_t copy_number = 0; copy_number < abundance_list[genome_ix]; ++copy_number){
-            append(ids, temp_ids);
+        // append the copy number to the id as a suffix to prevent sam parsing 
+        // errors
+        for(uint32_t copy_number = 0; 
+                copy_number < abundance_list[genome_ix]; 
+                ++copy_number){
+
+            seqan::StringSet<seqan::CharString> ids_with_copy_number = temp_ids;
+
+            //for(auto &id: ids_with_copy_number){
+            //    std::stringstream copy_indicator;
+            //    copy_indicator << "_" << copy_number;
+            //    append(id, copy_indicator.str());
+            //    appendValue(ids_with_copy_number, id);
+            //}
+
+            append(ids, ids_with_copy_number);
             append(seqs, temp_seqs);
         }
 
     }
 
     // dump artificial metagenome to single fasta file
-    std::string metagenome_fp = output_name + "metagenome.fasta";
-    seqan::SeqFileOut seqFileOut;
-    if (!open(seqFileOut, seqan::toCString(metagenome_fp))) {
-            std::cerr << "ERROR: Could not open file: temp_metagenome.fasta" << std::endl;
-            exit(1);
-    }
-
+    std::string metagenome_fp = output_name + "_synthetic_metagenome.fasta";
+    seqan::SeqFileOut seqFileOut (metagenome_fp.c_str());
     writeRecords(seqFileOut, ids, seqs);
 
     return metagenome_fp;
@@ -240,12 +250,7 @@ TAnnotationMap readAmrAnnotations(
     if(annotation_type == "gff"){
         for (auto &gff_fp : annotation_fps){
 
-            seqan::GffFileIn gffFileIn;
-            if (!open(gffFileIn, seqan::toCString(gff_fp))) {
-                std::cerr << "ERROR: Could not open file: " << gff_fp << std::endl;
-                std::exit(1);
-            }
-
+            seqan::GffFileIn gffFileIn (gff_fp.c_str());
             seqan::GffRecord gff_record;
             std::string aro;
 
@@ -255,7 +260,9 @@ TAnnotationMap readAmrAnnotations(
 
                     aro = "";
                     
-                    for (uint32_t i = 0; i < length(gff_record.tagValues[1]); ++i) {
+                    for (uint32_t i = 0; 
+                            i < length(gff_record.tagValues[1]); 
+                            ++i){
                         if (gff_record.tagValues[1][i] == ','){
                             break;
                         }
@@ -309,16 +316,17 @@ TAnnotationMap readAmrAnnotations(
                                                stoui32(split_line[2]),
                                                stoui32(split_line[3]),
                                                split_line[4].c_str()[0]};
-                    std::cout << annotation << std::endl;
                     annotations.push_back(annotation);
                 }
             } else {
-                std::cerr << "ERROR: Could not open file: " << tsv_fp << std::endl;
+                std::cerr << "ERROR: Could not open file: " 
+                    << tsv_fp << std::endl;
                 std::exit(1);
             }
         }
    } else {
-         std::cerr << "ERROR: invalid annotation type: " << annotation_type << std::endl;
+         std::cerr << "ERROR: invalid annotation type: " 
+             << annotation_type << std::endl;
           exit(1);
    }
 
@@ -358,11 +366,7 @@ void createLabels(TAnnotationMap annotations,
                   uint32_t minimum_overlap){
     
     // Open input file, BamFileIn can read SAM and BAM files.
-    seqan::BamFileIn bamFileIn;
-    if (!open(bamFileIn, seqan::toCString(sam_fp))) {
-        std::cerr << "ERROR: Could not open " << sam_fp << std::endl;
-        std::exit(1);
-    }
+    seqan::BamFileIn bamFileIn (sam_fp.c_str());
 
     // Open output file, BamFileOut accepts also an ostream and a format tag.
     std::ofstream labels_fh;
@@ -390,25 +394,23 @@ void createLabels(TAnnotationMap annotations,
             std::vector<uint32_t> overlaps {};
             
             // by checking all the annotations
+            // only check when the annotation's contig is the same as the reads
             for (auto &annotation : annotations[seqan::toCString(contigNames(bamContext)[bam_record.rID])]){
-                
-                // only check when the annotation's contig is the same as the reads
-                //if (annotation.contig == seqan::toCString(contigNames(bamContext)[bamRecord.rID])) {
-                    bool both_pos = annotation.strand == '+' and not hasFlagRC(bam_record);
-                    bool both_neg = annotation.strand == '-' and hasFlagRC(bam_record);
+                bool both_pos = annotation.strand == '+' and not hasFlagRC(bam_record);
+                bool both_neg = annotation.strand == '-' and hasFlagRC(bam_record);
                     
-                    // both on the same strand
-                    if (both_pos or both_neg) {
+                // both on the same strand
+                if (both_pos or both_neg) {
                         
-                        int32_t overlap = rangeOverlap(annotation.start, 
-                                                       annotation.end,
-                                                       bam_record.beginPos, 
-                                                       bam_record.beginPos + length(bam_record.seq));
-                        if (overlap > minimum_overlap) {
-                            labels.push_back(annotation.aro);
-                            overlaps.push_back(overlap); 
-                        }
+                    int32_t overlap = rangeOverlap(annotation.start, 
+                                                   annotation.end,
+                                                   bam_record.beginPos, 
+                                                   bam_record.beginPos + length(bam_record.seq));
+                    if (overlap > minimum_overlap) {
+                        labels.push_back(annotation.aro);
+                        overlaps.push_back(overlap); 
                     }
+                }
             }
             // sort and find unique AROs in labels due gff duplication issue wit RGI
             std::sort(labels.begin(), labels.end());
@@ -450,9 +452,6 @@ void createLabels(TAnnotationMap annotations,
 
 int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end, 
                      uint32_t read_loc_start, uint32_t read_loc_end){
-    
-    //std::cout << annot_start << " " << annot_end << std::endl;
-    //std::cout << read_loc_start << " " << read_loc_end << std::endl;
 
     int minimum = std::max(annot_start, read_loc_start);
     int maximum = std::min(annot_end, read_loc_end);
@@ -532,7 +531,8 @@ int generateTraining(int argc, char *argv[]){
                                                         options.annotation_type);
     
     // get labels for error free for now
-    std::cout << "Creating labels: " << options.output_name + ".labels" << std::endl;
+    std::cout << "Creating labels: " 
+        << options.output_name + ".labels" << std::endl;
     createLabels(amr_annotations, errfree_simulated_sam_fp, 
                  options.output_name, options.minimum_overlap);
 

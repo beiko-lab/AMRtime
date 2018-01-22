@@ -40,6 +40,5 @@ add_subdirectory(src)
 
 # add tests subdirectoy
 if (test)
-  add_subdirectory(src/test)
-  #  add_subdirectory(src/test/test_data)
+  add_subdirectory(test)
 endif()
