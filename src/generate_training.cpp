@@ -19,7 +19,9 @@
 // ===========================================================================
 
 std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation){
-    // to dump the attributes
+    /* Custom ostream operator to dump all the attribute to output
+     * for the AmrAnnotation class
+     */
     return out << "contig: " << annotation.contig 
             << ", aro: " << annotation.aro 
             << ", amr_name: " << annotation.amr_name 
@@ -30,23 +32,25 @@ std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation){
 };
 
 bool operator== (const AmrAnnotation &first, const AmrAnnotation &other) {
-        bool comparison[7] = {first.contig == other.contig,
-                              first.aro == other.aro,
-                              first.amr_name == other.amr_name,
-                              first.cutoff == other.cutoff,
-                              first.start == other.start,
-                              first.end == other.end,
-                              first.strand == other.strand};
-        // quick sum as comparison
-        int sum = std::accumulate(comparison, comparison + 7, 0);
+    /* Custom comparison for the AmrAnnotation class that just checks
+     * all the attributes match
+     */
+    bool comparison[7] = {first.contig == other.contig,
+                          first.aro == other.aro,
+                          first.amr_name == other.amr_name,
+                          first.cutoff == other.cutoff,
+                          first.start == other.start,
+                          first.end == other.end,
+                          first.strand == other.strand};
+    // quick sum as comparison
+    int sum = std::accumulate(comparison, comparison + 7, 0);
 
-        // all true
-        if(sum == 7) {
-            return true;
-        }
-        else {
-            return false;
-        }
+    // all true
+    if(sum == 7) {
+        return true;
+    } else {
+        return false;
+    }
 };
 
 // ===========================================================================
@@ -56,12 +60,12 @@ bool operator== (const AmrAnnotation &first, const AmrAnnotation &other) {
 // ---------------------------------------------------------------------------
 // Function parseGenerateArgs()
 // ---------------------------------------------------------------------------
-
 seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options, 
                                                      int argc,
                                                      char** argv){
-    // Build argument parser and store parsed arguments 
-    // in an instance of the Options class
+    /* Build argument parser, validate and store parsed arguments 
+     *in an instance of the GenerateOptions class.
+     */
     seqan::ArgumentParser parser("generate_training");
 
     setShortDescription(parser, "Synthetic Metagenomes Generator");
@@ -171,9 +175,9 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
 // ---------------------------------------------------------------------------
 // Function split()
 // ---------------------------------------------------------------------------
-
 TStrList split(std::string str, char delimiter) {
-    // split a string on a specific delimiter
+    /* split a string on a specific delimiter
+     */
     TStrList split_string;
     std::stringstream ss(str);
     std::string fragment;
@@ -188,12 +192,12 @@ TStrList split(std::string str, char delimiter) {
 // ---------------------------------------------------------------------------
 // Function prepareMetagenome()
 // ---------------------------------------------------------------------------
-
 std::string prepareMetagenome(TStrList genome_list,
                               std::vector<uint32_t> abundance_list,
                               std::string output_name) {
-    // Copy the genomes up to necessary numbers into the artifical
-    // metagenome contigs
+    /* Copy the genomes up to necessary numbers into the artifical
+     * metagenome contigs
+     */
 
     seqan::StringSet<seqan::CharString> ids;
     seqan::StringSet<seqan::Dna5String> seqs;
@@ -245,6 +249,9 @@ std::string prepareMetagenome(TStrList genome_list,
 TAnnotationMap readAmrAnnotations(
         TStrList annotation_fps, 
         std::string annotation_type) {
+    /* Parse the RGI TSV or RGI GFF file and store the AMR annotation details
+     * in a contig-keyed map with lists of AmrAnnotation classes as the values.
+     */
 
     std::vector<AmrAnnotation> annotations;
     
@@ -345,9 +352,11 @@ TAnnotationMap readAmrAnnotations(
 // ---------------------------------------------------------------------------
 // Function stoui32()
 // ---------------------------------------------------------------------------
-
 uint32_t stoui32(const std::string& s) {
-    // make sure it isn't negative for some reason
+    /* Convert string to unsigned 32-bit integer
+     * make sure it isn't negative for some reason as this shouldn't 
+     * happen in the input as they are coords.
+     */
     if(s[0] == '-'){
         throw std::invalid_argument("Received negative value");
     }
@@ -361,11 +370,14 @@ uint32_t stoui32(const std::string& s) {
 // ---------------------------------------------------------------------------
 // Function createLabels()
 // ---------------------------------------------------------------------------
-
 void createLabels(TAnnotationMap annotations, 
                   std::string sam_fp, 
                   std::string output_name,
                   uint32_t minimum_overlap){
+    /* Using the parsed annotations, check the locations for the simulated
+     * reads in the SAM file and determine whether they overlap with the 
+     * annotated AMR genes
+     */
     
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn (sam_fp.c_str());
@@ -451,9 +463,10 @@ void createLabels(TAnnotationMap annotations,
 // ---------------------------------------------------------------------------
 // Function rangeOverlap()
 // ---------------------------------------------------------------------------
-
 int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end, 
                      uint32_t read_loc_start, uint32_t read_loc_end){
+    /* Calculate the overlap size between two sets of start and end coordinates
+     */
 
     int minimum = std::max(annot_start, read_loc_start);
     int maximum = std::min(annot_end, read_loc_end);
@@ -469,22 +482,13 @@ int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end,
 }
 
 // ---------------------------------------------------------------------------
-// Function checkFile()
-// ---------------------------------------------------------------------------
-
-////template <class T>;
-//void checkFile(T file, std::string name){
-//    if(!T.is_open()){
-//        std::cerr << "Error: File not valid: " << name << std::endl;
-//        exit(1);
-//    }
-//}
-
-// ---------------------------------------------------------------------------
 // Function getCleanReads()
 // ---------------------------------------------------------------------------
-
 void getCleanReads(std::string output_name){
+    /* Simultaneously read through the label file and output fastq
+     * and dump them into a new file iff there is a positive label (i.e.
+     * an ARO for that read.
+     */
     
     // open all the required input and output files
     std::string output_fq = output_name + ".fq";
@@ -495,19 +499,15 @@ void getCleanReads(std::string output_name){
     
     std::string output_label_fp = output_name + ".labels";
     std::ifstream output_labels(output_label_fp);
-    //checkFile<std::ifstream>(output_labels, output_label_fp);
     
     std::string clean_label_fp = output_name + "_clean.labels";
     std::ofstream clean_labels(clean_label_fp);
-    //checkFile<std::ofstream>(clean_labels, clean_label_fp);
 
     std::string output_overlap_fp = output_name + ".overlaps";
     std::ifstream output_overlaps(output_overlap_fp);
-    //checkFile<std::ifstream>(output_overlaps, output_overlap_fp);
 
     std::string clean_overlap_fp = output_name + "_clean.overlaps";
     std::ofstream clean_overlaps(clean_overlap_fp);
-    //checkFile<std::ofstream>(clean_overlaps, clean_overlap_fp);
 
     
     // initialise variables to hold the values as I'm reading over the files
@@ -541,9 +541,14 @@ void getCleanReads(std::string output_name){
 // ==========================================================================
 // Function generateTraining()
 // ==========================================================================
-
 int generateTraining(int argc, char *argv[]){
-    // Create simulated metagenome and label the reads
+    /* Main runner function for the generation of training data mode
+     * parameterised by the post 'mode' selection command line args.
+     *
+     * It creates a synthetic metagenome and reads RGI output for the input
+     * genomes to determine whether a given read in the synthetic metagenome
+     * is from an AMR determinant.
+     */
 
     // Get command line arguments
     GenerateOptions options;
