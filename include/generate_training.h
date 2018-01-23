@@ -11,6 +11,7 @@
 // Classes and Typedefs
 // ===========================================================================
 typedef std::vector<std::string> TStrList;
+//template <class T>;
 
 class GenerateOptions {
     // class to contain formatted input options
@@ -24,6 +25,7 @@ class GenerateOptions {
         std::string annotation_type;
         std::string art_error_profile;
         uint32_t minimum_overlap;
+        bool get_clean_reads;
 };
 
 // currently not used but will need later possible
@@ -97,8 +99,9 @@ void createLabels(TAnnotationMap annotations,
 
 uint32_t stoui32(const std::string& s);
 
-int generateTraining(int argc, char *argv[]);
+void getCleanReads(std::string output_name);
 
+int generateTraining(int argc, char *argv[]);
 
 std::ostream& operator<< (std::ostream &out, const AmrAnnotation &annotation);
 bool operator== (const AmrAnnotation &first, const AmrAnnotation &other);

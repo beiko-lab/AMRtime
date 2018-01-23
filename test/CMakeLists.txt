@@ -11,4 +11,4 @@ configure_file(data/test_2.fna data/test_2.fna COPYONLY)
 configure_file(data/test_2.tsv data/test_2.tsv COPYONLY)
 
 target_link_libraries(run_unit_tests GTest::Main ${SEQAN_LIBRARIES})
-add_test(UnitTests ./bin/run_unit_tests)
+add_test(NAME test COMMAND run_unit_tests)

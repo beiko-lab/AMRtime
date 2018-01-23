@@ -125,6 +125,10 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
     setMinValue(parser, "minimum_overlap", "1");
     setDefaultValue(parser, "minimum_overlap", 50);
 
+    addOption(parser, seqan::ArgParseOption(
+        "x", "get_clean_reads", 
+        "Optionally output only positive labelled data"));
+
     seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
 
     if (res != seqan::ArgumentParser::PARSE_OK){
@@ -160,6 +164,7 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
     getOptionValue(options.art_error_profile, parser, "art_error_profile");
     getOptionValue(options.annotation_type, parser, "annotation_type");
     getOptionValue(options.minimum_overlap, parser, "minimum_overlap");
+    getOptionValue(options.get_clean_reads, parser, "get_clean_reads");
     return seqan::ArgumentParser::PARSE_OK;
 }
 
@@ -212,17 +217,14 @@ std::string prepareMetagenome(TStrList genome_list,
         for(uint32_t copy_number = 0; 
                 copy_number < abundance_list[genome_ix]; 
                 ++copy_number){
-
-            seqan::StringSet<seqan::CharString> ids_with_copy_number = temp_ids;
-
+            //seqan::StringSet<seqan::CharString> ids_with_copy_number = temp_ids;
             //for(auto &id: ids_with_copy_number){
             //    std::stringstream copy_indicator;
             //    copy_indicator << "_" << copy_number;
             //    append(id, copy_indicator.str());
             //    appendValue(ids_with_copy_number, id);
             //}
-
-            append(ids, ids_with_copy_number);
+            append(ids, temp_ids);
             append(seqs, temp_seqs);
         }
 
@@ -458,13 +460,83 @@ int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end,
 
     if (minimum <= maximum) {
         // adding 1 to make it an inclusive range overlap
-        return maximum - minimum + 1;
+        return maximum - minimum;
     }
     else {
         //std::cout << 0 << std::endl;
         return 0;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Function checkFile()
+// ---------------------------------------------------------------------------
+
+////template <class T>;
+//void checkFile(T file, std::string name){
+//    if(!T.is_open()){
+//        std::cerr << "Error: File not valid: " << name << std::endl;
+//        exit(1);
+//    }
+//}
+
+// ---------------------------------------------------------------------------
+// Function getCleanReads()
+// ---------------------------------------------------------------------------
+
+void getCleanReads(std::string output_name){
+    
+    // open all the required input and output files
+    std::string output_fq = output_name + ".fq";
+    seqan::SeqFileIn seqFileIn(output_fq.c_str());
+
+    std::string clean_fq = output_name + "_clean.fq";
+    seqan::SeqFileOut seqFileOut(clean_fq.c_str());
+    
+    std::string output_label_fp = output_name + ".labels";
+    std::ifstream output_labels(output_label_fp);
+    //checkFile<std::ifstream>(output_labels, output_label_fp);
+    
+    std::string clean_label_fp = output_name + "_clean.labels";
+    std::ofstream clean_labels(clean_label_fp);
+    //checkFile<std::ofstream>(clean_labels, clean_label_fp);
+
+    std::string output_overlap_fp = output_name + ".overlaps";
+    std::ifstream output_overlaps(output_overlap_fp);
+    //checkFile<std::ifstream>(output_overlaps, output_overlap_fp);
+
+    std::string clean_overlap_fp = output_name + "_clean.overlaps";
+    std::ofstream clean_overlaps(clean_overlap_fp);
+    //checkFile<std::ofstream>(clean_overlaps, clean_overlap_fp);
+
+    
+    // initialise variables to hold the values as I'm reading over the files
+    seqan::CharString id;
+    seqan::Dna5String seq;
+    seqan::CharString qual;
+
+    std::string label;
+    std::string overlap;
+    
+    while (!atEnd(seqFileIn)) {
+        readRecord(id, seq, qual, seqFileIn);
+        getline(output_labels, label);
+        getline(output_overlaps, overlap);
+        
+        // if actually labelled
+        if(label != "NONE"){
+            writeRecord(seqFileOut, id, seq, qual);
+            clean_labels << label << std::endl;
+            clean_overlaps << overlap << std::endl;
+        }
+    }
+    
+    output_labels.close();
+    clean_labels.close();
+    output_overlaps.close();
+    clean_overlaps.close();
+}
+
 
 // ==========================================================================
 // Function generateTraining()
@@ -531,10 +603,23 @@ int generateTraining(int argc, char *argv[]){
                                                         options.annotation_type);
     
     // get labels for error free for now
-    std::cout << "Creating labels: " 
-        << options.output_name + ".labels" << std::endl;
-    createLabels(amr_annotations, errfree_simulated_sam_fp, 
-                 options.output_name, options.minimum_overlap);
+    std::cout << "Creating labels and overlap details: " 
+        << options.output_name + ".labels " 
+        << options.output_name + ".overlaps"
+        << std::endl;
+
+    createLabels(amr_annotations, 
+                 errfree_simulated_sam_fp, 
+                 options.output_name, 
+                 options.minimum_overlap);
+
+    if(options.get_clean_reads){
+        std::cout << "Creating clean labels and overlap details: " 
+            << options.output_name + "_clean.fq" 
+            << options.output_name + "_clean.labels" 
+            << options.output_name + "_clean.overlaps" << std::endl;
+        getCleanReads(options.output_name);
+    }
 
     return 0;
 }

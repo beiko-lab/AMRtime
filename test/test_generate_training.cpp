@@ -116,7 +116,7 @@ TEST(prepareMetagenome, Correct){
                                                   std::vector<uint32_t> {3, 1},
                                                   "actual");
     EXPECT_TRUE(compareFiles(actual_output, expected_output));
-    //remove(actual_output.c_str());
+    remove(actual_output.c_str());
 }
 
 
