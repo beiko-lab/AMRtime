@@ -181,7 +181,7 @@ TStrList split(std::string str, char delimiter) {
     TStrList split_string;
     std::stringstream ss(str);
     std::string fragment;
-
+    
     while(std::getline(ss, fragment, delimiter)){
         split_string.push_back(fragment);
     }
@@ -221,15 +221,29 @@ std::string prepareMetagenome(TStrList genome_list,
         for(uint32_t copy_number = 0; 
                 copy_number < abundance_list[genome_ix]; 
                 ++copy_number){
-            //seqan::StringSet<seqan::CharString> ids_with_copy_number = temp_ids;
-            //for(auto &id: ids_with_copy_number){
-            //    std::stringstream copy_indicator;
-            //    copy_indicator << "_" << copy_number;
-            //    append(id, copy_indicator.str());
-            //    appendValue(ids_with_copy_number, id);
-            //}
-            append(ids, temp_ids);
+            
+            // copy the sequences in the specified number of times
             append(seqs, temp_seqs);
+            
+            // add the correct copy number to accession
+            // add it to the first space as SAM etc truncate at the first
+            // space of the accession
+            seqan::StringSet<seqan::CharString> ids_with_copy_number;
+            for(auto &id: temp_ids){
+                std::stringstream id_ss;
+                id_ss << id;
+                std::string id_str = id_ss.str();
+
+                std::size_t first_space = id_str.find_first_of(" ");
+                std::string first_part = id_str.substr(0, first_space);
+                std::string second_part = id_str.substr(first_space);
+
+                std::stringstream id_with_copy;
+                id_with_copy << first_part << "_" << copy_number << second_part;
+
+                appendValue(ids_with_copy_number, id_with_copy.str());
+            }
+            append(ids, ids_with_copy_number);
         }
 
     }
@@ -409,22 +423,37 @@ void createLabels(TAnnotationMap annotations,
             
             // by checking all the annotations
             // only check when the annotation's contig is the same as the reads
-            for (auto &annotation : annotations[seqan::toCString(contigNames(bamContext)[bam_record.rID])]){
+            std::stringstream contig_name_ss;
+            contig_name_ss << seqan::toCString(contigNames(bamContext)[bam_record.rID]);
+            std::string contig_name = contig_name_ss.str();
+
+            std::string first_part = contig_name.substr(0, 
+                                               contig_name.find_first_of(" "));
+
+            std::string contig_without_copy = first_part.substr(0, 
+                                                contig_name.find_last_of("_"));
+
+             for (auto &annotation : annotations[contig_without_copy]){
                 bool both_pos = annotation.strand == '+' and not hasFlagRC(bam_record);
                 bool both_neg = annotation.strand == '-' and hasFlagRC(bam_record);
                     
                 // both on the same strand
-                if (both_pos or both_neg) {
+                //if (both_pos or both_neg) {
                         
                     int32_t overlap = rangeOverlap(annotation.start, 
                                                    annotation.end,
                                                    bam_record.beginPos, 
                                                    bam_record.beginPos + length(bam_record.seq));
                     if (overlap > minimum_overlap) {
-                        labels.push_back(annotation.aro);
+                        std::stringstream label_ss;
+                        label_ss << annotation.aro << "\t" << 
+                            annotation.amr_name << "\t" << 
+                            annotation.cutoff << "\t" << 
+                            annotation.contig << std::endl;
+                        labels.push_back(label_ss.str());
                         overlaps.push_back(overlap); 
                     }
-                }
+                //}
             }
             // sort and find unique AROs in labels due gff duplication issue wit RGI
             std::sort(labels.begin(), labels.end());
@@ -473,7 +502,7 @@ int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end,
 
     if (minimum <= maximum) {
         // adding 1 to make it an inclusive range overlap
-        return maximum - minimum;
+        return maximum - minimum + 1;
     }
     else {
         //std::cout << 0 << std::endl;
@@ -620,9 +649,9 @@ int generateTraining(int argc, char *argv[]){
 
     if(options.get_clean_reads){
         std::cout << "Creating clean labels and overlap details: " 
-            << options.output_name + "_clean.fq" 
-            << options.output_name + "_clean.labels" 
-            << options.output_name + "_clean.overlaps" << std::endl;
+            << options.output_name + "_clean.fq " 
+            << options.output_name + "_clean.labels " 
+            << options.output_name + "_clean.overlaps " << std::endl;
         getCleanReads(options.output_name);
     }
 

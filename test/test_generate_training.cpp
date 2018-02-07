@@ -120,12 +120,10 @@ TEST(prepareMetagenome, Correct){
 }
 
 
-//void createLabels(TAnnotationMap annotations, 
-//                  std::string sam_fp,
-//                  std::string output_name);
+// Test label generation
 TEST(createLabels, Correct){
 
-    std::string sam_fp = "../test/data/reads.sam";
+    std::string sam_fp = "../test/data/test.sam";
     TAnnotationMap annotations;
 
     annotations["AILI01000002"] = std::vector<AmrAnnotation> {
@@ -136,6 +134,7 @@ TEST(createLabels, Correct){
                        60044, 
                        61507, 
                        '+'},
+
         AmrAnnotation {"AILI01000002", 
                        "3000822", 
                        "pmrA", 
@@ -161,12 +160,11 @@ TEST(createLabels, Correct){
                        '-'}
     };   
     
-    std::string output;
+    std::string output = "test";
+    createLabels(annotations, sam_fp, output, 50);
         
-    //EXPECT_TRUE(compareFiles(actual_output, expected_output));
+    EXPECT_TRUE(compareFiles("test.labels", "expected_test.labels"));
     //remove(actual_output.c_str());
-
-    EXPECT_EQ(1,1);
 }
 
 // ===========================================================================
