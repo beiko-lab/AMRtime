@@ -443,11 +443,11 @@ void createLabels(TAnnotationMap annotations,
                 if (overlap > minimum_overlap) {
                     std::stringstream label_ss;
                         label_ss << bam_record.qName << "\t"
-                        << contig_name << "\t"
-                        << annotation.aro << "\t" 
-                        << annotation.amr_name << "\t"
-                        << annotation.cutoff << "\t" 
-                        << overlap << std::endl;
+                            << contig_name << "\t"
+                            << annotation.aro << "\t" 
+                            << annotation.amr_name << "\t"
+                            << annotation.cutoff << "\t" 
+                            << overlap << std::endl;
                     labels.push_back(label_ss.str());
                 }
             }

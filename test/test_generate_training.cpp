@@ -179,8 +179,8 @@ TEST(getCleanReads, Correct){
     EXPECT_TRUE(compareFiles(actual_clean_labels,
                              "test/data/expected_clean_labels.tsv"));
 
-    //remove(actual_clean_labels.c_str());
-    //remove(actual_clean_fq.c_str());
+    remove(actual_clean_labels.c_str());
+    remove(actual_clean_fq.c_str());
 }
 
 // ./bin/amrtime generate_training test/data/test_1.fna,test/data/test_2.fna test/data/test_1.tsv,test/data/test_2.tsv 3,1 -x
