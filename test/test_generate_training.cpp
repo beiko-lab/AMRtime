@@ -44,9 +44,9 @@ TEST(splitTest, expected) {
 
 // Tests range_overlap calculates the correct overlap size between ranges
 TEST(rangeOverlapTest, expected){
-    EXPECT_EQ(5, rangeOverlap(0, 19, 15, 39));
+    EXPECT_EQ(4, rangeOverlap(0, 19, 15, 39));
     EXPECT_EQ(0, rangeOverlap(0, 99, 250, 259));
-    EXPECT_EQ(100, rangeOverlap(0, 499, 250, 349));
+    EXPECT_EQ(99, rangeOverlap(0, 499, 250, 349));
 }
 
 // Test string to uint32_t works correctly
@@ -61,8 +61,8 @@ TEST(stoui32Test, expected){
 // Test readAmrAnnotation reads rgi tsv's correctly
 TEST(readAmrAnnotation, rgi_tsv){
 
-    TStrList test_annotation_tsvs = {"../test/data/test_1.tsv", 
-                                     "../test/data/test_2.tsv"};
+    TStrList test_annotation_tsvs = {"test/data/test_1.tsv", 
+                                     "test/data/test_2.tsv"};
 
     // fill expected AMR annotation map
     TAnnotationMap expected;
@@ -98,8 +98,7 @@ TEST(readAmrAnnotation, rgi_tsv){
                        517693,
                        '-'}
     };
-    
-    std::cout << "running func" << std::endl;
+
     TAnnotationMap actual = readAmrAnnotations(test_annotation_tsvs, "rgi_tsv");
     EXPECT_EQ(expected["AILI01000002"], actual["AILI01000002"]);
     EXPECT_EQ(expected["ALCK01000005"], actual["ALCK01000005"]);
@@ -108,8 +107,8 @@ TEST(readAmrAnnotation, rgi_tsv){
 
 // Test that prepareMetagenome makes the right file with the right coverage
 TEST(prepareMetagenome, Correct){
-    TStrList genome_list = {"../test/data/test_1.fna", 
-                            "../test/data/test_2.fna"};
+    TStrList genome_list = {"test/data/test_1.fna", 
+                            "test/data/test_2.fna"};
     
     std::string expected_output = "test/data/expected_metagenome.fna";
     std::string actual_output = prepareMetagenome(genome_list, 
@@ -120,10 +119,10 @@ TEST(prepareMetagenome, Correct){
 }
 
 
-// Test label generation
+// Test label generation (although only in the positive i.e. all the labels
+// that should exist, existing)
 TEST(createLabels, Correct){
-
-    std::string sam_fp = "../test/data/test.sam";
+    std::string sam_fp = "test/data/test.sam";
     TAnnotationMap annotations;
 
     annotations["AILI01000002"] = std::vector<AmrAnnotation> {
@@ -163,9 +162,28 @@ TEST(createLabels, Correct){
     std::string output = "test";
     createLabels(annotations, sam_fp, output, 50);
         
-    EXPECT_TRUE(compareFiles("test.labels", "expected_test.labels"));
-    //remove(actual_output.c_str());
+    EXPECT_TRUE(compareFiles("test_labels.tsv", 
+                "test/data/bedtool_labels.tsv"));
+    remove("test_labels.tsv");
 }
+
+// Test label generation (although only in the positive i.e. all the labels
+// that should exist, existing)
+TEST(getCleanReads, Correct){
+    std::string actual_clean_fq = "test/data/bedtool_clean.fq";
+    std::string actual_clean_labels = "test/data/bedtool_clean_labels.tsv";
+    getCleanReads("test/data/bedtool");
+
+    EXPECT_TRUE(compareFiles(actual_clean_fq,
+                            "test/data/expected_clean.fq"));
+    EXPECT_TRUE(compareFiles(actual_clean_labels,
+                             "test/data/expected_clean_labels.tsv"));
+
+    //remove(actual_clean_labels.c_str());
+    //remove(actual_clean_fq.c_str());
+}
+
+// ./bin/amrtime generate_training test/data/test_1.fna,test/data/test_2.fna test/data/test_1.tsv,test/data/test_2.tsv 3,1 -x
 
 // ===========================================================================
 // Test Runner

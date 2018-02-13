@@ -391,6 +391,9 @@ void createLabels(TAnnotationMap annotations,
     /* Using the parsed annotations, check the locations for the simulated
      * reads in the SAM file and determine whether they overlap with the 
      * annotated AMR genes
+     * 
+     * Output the labels in the format of a tsv 
+     * read_name \t contig_name (and which copy) \t aro \t name \t cut-off \t overlap
      */
     
     // Open input file, BamFileIn can read SAM and BAM files.
@@ -398,11 +401,8 @@ void createLabels(TAnnotationMap annotations,
 
     // Open output file, BamFileOut accepts also an ostream and a format tag.
     std::ofstream labels_fh;
-    labels_fh.open (output_name + ".labels");
+    labels_fh.open (output_name + "_labels.tsv");
 
-    std::ofstream overlaps_fh;
-    overlaps_fh.open (output_name + ".overlaps");
-    
     try {
         // Copy header.
         seqan::BamHeader header;
@@ -426,56 +426,49 @@ void createLabels(TAnnotationMap annotations,
             std::stringstream contig_name_ss;
             contig_name_ss << seqan::toCString(contigNames(bamContext)[bam_record.rID]);
             std::string contig_name = contig_name_ss.str();
-
+            
+            // strip out contig copy number indicator
             std::string first_part = contig_name.substr(0, 
                                                contig_name.find_first_of(" "));
 
             std::string contig_without_copy = first_part.substr(0, 
                                                 contig_name.find_last_of("_"));
 
-             for (auto &annotation : annotations[contig_without_copy]){
-                bool both_pos = annotation.strand == '+' and not hasFlagRC(bam_record);
-                bool both_neg = annotation.strand == '-' and hasFlagRC(bam_record);
-                    
-                // both on the same strand
-                //if (both_pos or both_neg) {
-                        
-                    int32_t overlap = rangeOverlap(annotation.start, 
-                                                   annotation.end,
-                                                   bam_record.beginPos, 
-                                                   bam_record.beginPos + length(bam_record.seq));
-                    if (overlap > minimum_overlap) {
-                        std::stringstream label_ss;
-                        label_ss << annotation.aro << "\t" << 
-                            annotation.amr_name << "\t" << 
-                            annotation.cutoff << "\t" << 
-                            annotation.contig << std::endl;
-                        labels.push_back(label_ss.str());
-                        overlaps.push_back(overlap); 
-                    }
-                //}
+            for (auto &annotation : annotations[contig_without_copy]){
+                int32_t overlap = rangeOverlap(annotation.start, 
+                                               annotation.end,
+                                               bam_record.beginPos, 
+                                               bam_record.beginPos + length(bam_record.seq));
+
+                if (overlap > minimum_overlap) {
+                    std::stringstream label_ss;
+                        label_ss << bam_record.qName << "\t"
+                        << contig_name << "\t"
+                        << annotation.aro << "\t" 
+                        << annotation.amr_name << "\t"
+                        << annotation.cutoff << "\t" 
+                        << overlap << std::endl;
+                    labels.push_back(label_ss.str());
+                }
             }
-            // sort and find unique AROs in labels due gff duplication issue wit RGI
+
+            // remove any potential duplicate labels, unecessary?
             std::sort(labels.begin(), labels.end());
             labels.erase(std::unique(labels.begin(), labels.end()), labels.end());
             
             // print the labels
             if (labels.size() == 0) {
-                labels_fh << "NONE" << std::endl;
-            }
-            if (labels.size() == 0) {
-                overlaps_fh << "0" << std::endl;
+                labels_fh << "na" << "\t"
+                    << "na" << "\t"
+                    << "na" << "\t"
+                    << "na" << "\t"
+                    << "na" << "\t"
+                    << "na" << std::endl;
             }
             else {
-                for (auto &label : labels) {
-                    labels_fh << label << ' ';
+                for(auto &label: labels){
+                    labels_fh << label;
                 }
-                labels_fh << std::endl;
-                
-                for (auto &overlap : overlaps){
-                    overlaps_fh << overlap << ' ';
-                }
-                overlaps_fh << std::endl;
             }
         }
     }
@@ -502,7 +495,7 @@ int32_t rangeOverlap(uint32_t annot_start, uint32_t annot_end,
 
     if (minimum <= maximum) {
         // adding 1 to make it an inclusive range overlap
-        return maximum - minimum + 1;
+        return maximum - minimum;
     }
     else {
         //std::cout << 0 << std::endl;
@@ -526,19 +519,12 @@ void getCleanReads(std::string output_name){
     std::string clean_fq = output_name + "_clean.fq";
     seqan::SeqFileOut seqFileOut(clean_fq.c_str());
     
-    std::string output_label_fp = output_name + ".labels";
+    std::string output_label_fp = output_name + "_labels.tsv";
     std::ifstream output_labels(output_label_fp);
     
-    std::string clean_label_fp = output_name + "_clean.labels";
-    std::ofstream clean_labels(clean_label_fp);
+    std::ofstream clean_labels;
+    clean_labels.open(output_name + "_clean_labels.tsv");
 
-    std::string output_overlap_fp = output_name + ".overlaps";
-    std::ifstream output_overlaps(output_overlap_fp);
-
-    std::string clean_overlap_fp = output_name + "_clean.overlaps";
-    std::ofstream clean_overlaps(clean_overlap_fp);
-
-    
     // initialise variables to hold the values as I'm reading over the files
     seqan::CharString id;
     seqan::Dna5String seq;
@@ -549,21 +535,16 @@ void getCleanReads(std::string output_name){
     
     while (!atEnd(seqFileIn)) {
         readRecord(id, seq, qual, seqFileIn);
-        getline(output_labels, label);
-        getline(output_overlaps, overlap);
-        
+        getline(output_labels, label); 
+
+        TStrList label_data = split(label, '\t');
         // if actually labelled
-        if(label != "NONE"){
+        if(label_data[0].compare("na") != 0){
             writeRecord(seqFileOut, id, seq, qual);
             clean_labels << label << std::endl;
-            clean_overlaps << overlap << std::endl;
         }
     }
-    
-    output_labels.close();
     clean_labels.close();
-    output_overlaps.close();
-    clean_overlaps.close();
 }
 
 
@@ -627,7 +608,7 @@ int generateTraining(int argc, char *argv[]){
     //    " FASTQ=" << options.output_name + "_errFree.fq 2> /dev/null" << std::endl;
     //System(picard_cmd.str().c_str());
 
-    std::cout << "Parsing annotations: ";
+    std::cout << "Parsing Annotations: ";
     for(auto &annotation : options.annotations) {
         std::cout << annotation << " ";
     }
@@ -637,10 +618,9 @@ int generateTraining(int argc, char *argv[]){
                                                         options.annotation_type);
     
     // get labels for error free for now
-    std::cout << "Creating labels and overlap details: " 
-        << options.output_name + ".labels " 
-        << options.output_name + ".overlaps"
-        << std::endl;
+    std::cout << "Creating Labels: " 
+        << options.output_name + "_labels.tsv " 
+        << std::endl << std::endl;
 
     createLabels(amr_annotations, 
                  errfree_simulated_sam_fp, 
@@ -648,10 +628,9 @@ int generateTraining(int argc, char *argv[]){
                  options.minimum_overlap);
 
     if(options.get_clean_reads){
-        std::cout << "Creating clean labels and overlap details: " 
+        std::cout << "Creating Clean Labels: " 
             << options.output_name + "_clean.fq " 
-            << options.output_name + "_clean.labels " 
-            << options.output_name + "_clean.overlaps " << std::endl;
+            << options.output_name + "_clean_labels.tsv" << std::endl;
         getCleanReads(options.output_name);
     }
 
