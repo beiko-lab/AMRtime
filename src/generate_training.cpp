@@ -74,22 +74,16 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
 
     setDate(parser, "January 2018");
 
-    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIGENOMELIST\\fP "
-                         "\\fIANNOTATIONLIST\\fP \\fIABUNDANCELIST\\fP");
+    addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIData_File.tsv\\fP");
 
     addDescription(
             parser,
             "Tool to generate synthetic metagenomes at specified coverage"
-            " and relative abundances from annotated genomes.");
+            " and relative abundances from annotated genomes as specified"
+            " in a supplied tsv formatted as genome_fp\tannotation_fp\tabundance.");
 
     addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::STRING, "genomes"));
-
-    addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::STRING, "annotations"));
-
-    addArgument(parser, seqan::ArgParseArgument(
-        seqan::ArgParseArgument::STRING, "abundances"));
+        seqan::ArgParseArgument::STRING, "data_tsv"));
 
     addOption(parser, seqan::ArgParseOption(
         "a", "annotation_type", "File type of RGI annotations.",
@@ -139,19 +133,36 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
         return res;
     }
     
-    std::string temp;
-    getArgumentValue(temp, parser, 0);
-    options.genomes = split(temp, ',');
+    
+    // parse data specified in tsv
+    std::string data_fp;
+    getArgumentValue(data_fp, parser, 0);
+    TStrList split_line;
+    std::string line;
+    std::ifstream data_fh (data_fp);
+    
+    // read data file 
+    if (data_fh.is_open()){
+        std::getline(data_fh, line);
+        while (std::getline(data_fh, line)){
+                split_line = split(line, '\t');
 
-    getArgumentValue(temp, parser, 1);
-    options.annotations = split(temp, ',');
+                // check for valid 3 column format
+                if(split_line.size() != 3){
+                    std::cerr << "Data file must be 3 column tsv formatted " <<
+                        data_fp << std::endl;
+                    std::exit(1);
+                }
+                options.genomes.push_back(split_line[0]);
+                options.annotations.push_back(split_line[1]);
+                options.relative_abundances.push_back(std::stoi(split_line[2].c_str()));
 
-    getArgumentValue(temp, parser, 2);
-    TStrList abundance_strings = split(temp, ',');
-    for (uint32_t i=0; i<abundance_strings.size(); ++i) {
-        uint32_t abundance = std::stoi(abundance_strings.at(i).c_str());
-        options.relative_abundances.push_back(abundance);
-    } 
+        }
+    } else {
+        std::cerr << "ERROR: Could not open metadata file: " << data_fp 
+            << std::endl;
+       std::exit(1);
+    }
 
     bool length_ok = (options.genomes.size() == options.annotations.size() && \
             options.annotations.size () == options.relative_abundances.size());
