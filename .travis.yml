@@ -13,6 +13,7 @@ before_install:
   - sudo cmake CMakeLists.txt
   - sudo make
   - sudo cp *.a /usr/lib
+  - cd $TRAVIS_BUILD_DIR
   - wget https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz 
   - tar xvf artbinmountrainier20160605linux64tgz.tgz
   - sudo cp art_bin_MountRainier/art_illumina /usr/bin
