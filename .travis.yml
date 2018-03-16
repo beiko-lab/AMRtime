@@ -6,7 +6,7 @@ before_install:
   - sudo apt-get install -y cmake seqan-dev libgtest-dev
   - wget https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz 
   - tar xvf artbinmountrainier20160605linux64tgz.tgz
-  - sudo cp art_illumina /usr/bin
+  - sudo cp art_bin_MountRainier/art_illumina /usr/bin
 
 install:
   - mkdir build
