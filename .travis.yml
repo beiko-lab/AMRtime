@@ -3,7 +3,10 @@ compiler: gcc
 
 before_install:
   - sudo apt-get update
-  - sudo apt-get install -y cmake libseqan2-dev libgtest-dev
+  - sudo apt-get install -y cmake libgtest-dev
+  - wget http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz
+  - tar xvf seqan-library-2.4.0.tar.xz
+  - sudo cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
   - wget https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz 
   - tar xvf artbinmountrainier20160605linux64tgz.tgz
   - sudo cp art_bin_MountRainier/art_illumina /usr/bin
