@@ -3,6 +3,8 @@
 cmake_minimum_required(VERSION 3.7.2)
 project(AMRtime)
 
+set (CMAKE_CXX_STANDARD 14)
+
 # versioning
 set(AMRtime_VERSION_MAJOR 0)
 set(AMRtime_VERSION_MINOR 0)
