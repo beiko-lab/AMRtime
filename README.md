@@ -26,8 +26,6 @@ Build uses the `cmake` configuration tool for out-of-source builds.
 
 To build:
 
-- `mkdir build`
-
 - `cd build`
 
 - `cmake ..` if your seqan library is in an unusual location or cmake if missing

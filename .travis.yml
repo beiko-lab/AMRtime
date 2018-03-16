@@ -9,7 +9,6 @@ before_install:
   - sudo cp art_bin_MountRainier/art_illumina /usr/bin
 
 install:
-  - mkdir build
   - cd build
   - cmake -DTest=on ..
   - make
