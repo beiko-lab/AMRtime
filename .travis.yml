@@ -15,7 +15,7 @@ before_install:
 
 install:
   - cd build
-  - cmake -DTest=on ..
+  - cmake -Dtest=ON ..
   - make
 
 script:
