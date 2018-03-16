@@ -5,6 +5,7 @@ before_install:
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo apt-get update
   - sudo apt-get install -y g++-5 gcc-5 cmake libgtest-dev
+  - sudo ln -f -s /usr/bin/g++-5 /usr/bin/g++
   - wget http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz
   - tar xvf seqan-library-2.4.0.tar.xz
   - sudo cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
