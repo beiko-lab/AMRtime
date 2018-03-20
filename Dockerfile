@@ -11,29 +11,26 @@ LABEL tags="Genomics"
 MAINTAINER Finlay Maguire <finlaymaguire@gmail.com>
 
 # install system dependencies
-RUN \
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     apt-get update && \
-    apt-get install -y g++-5 gcc-5 cmake libgtest-dev wget && \
+    apt-get install -y g++-5 gcc-5 cmake libgtest-dev && \
     ln -f -s /usr/bin/g++-5 /usr/bin/g++
 
 # install seqan
-RUN \
-    wget http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz && \
-    tar xvf seqan-library-2.4.0.tar.xz && \
+ADD http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz
+
+RUN tar xvf seqan-library-2.4.0.tar.xz && \
     cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
 
 # install gtest
-RUN \
-    cd /usr/src/gtest && \
+RUN cd /usr/src/gtest && \
     cmake CMakeLists.txt && \
     make && \
     cp *.a /usr/lib && cd
 
 # install art
-RUN \
-    wget https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz && \
-    tar xvf artbinmountrainier20160605linux64tgz.tgz && \
+ADD https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz 
+RUN tar xvf artbinmountrainier20160605linux64tgz.tgz && \
     cp art_bin_MountRainier/art_illumina /usr/bin 
 
 # install AMRtime
