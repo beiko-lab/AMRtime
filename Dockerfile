@@ -17,7 +17,7 @@ RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     ln -f -s /usr/bin/g++-5 /usr/bin/g++
 
 # install seqan
-ADD http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz
+ADD http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz seqan-library-2.4.0.tar.xz
 
 RUN tar xvf seqan-library-2.4.0.tar.xz && \
     cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
@@ -29,7 +29,7 @@ RUN cd /usr/src/gtest && \
     cp *.a /usr/lib && cd
 
 # install art
-ADD https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz 
+ADD https://www.niehs.nih.gov/research/resources/assets/docs/artbinmountrainier20160605linux64tgz.tgz artbinmountrainier20160605linux64tgz.tgz
 RUN tar xvf artbinmountrainier20160605linux64tgz.tgz && \
     cp art_bin_MountRainier/art_illumina /usr/bin 
 
