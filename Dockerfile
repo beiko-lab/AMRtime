@@ -14,7 +14,7 @@ MAINTAINER Finlay Maguire <finlaymaguire@gmail.com>
 RUN \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
     apt-get update && \
-    apt-get install -y g++-5 gcc-5 cmake libgtest-dev && \
+    apt-get install -y g++-5 gcc-5 cmake libgtest-dev wget && \
     ln -f -s /usr/bin/g++-5 /usr/bin/g++
 
 # install seqan
