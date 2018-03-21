@@ -213,6 +213,10 @@ std::string prepareMetagenome(TStrList genome_list,
     seqan::StringSet<seqan::CharString> ids;
     seqan::StringSet<seqan::Dna5String> seqs;
 
+    // open filehandle to artificial metagenome to dump single fasta file
+    std::string metagenome_fp = output_name + "_synthetic_metagenome.fasta";
+    seqan::SeqFileOut seqFileOut (metagenome_fp.c_str());
+
     // read each genome in list and 'amplify' for relative abundance
     for(uint32_t genome_ix = 0; genome_ix < genome_list.size(); ++genome_ix){
         
@@ -234,8 +238,6 @@ std::string prepareMetagenome(TStrList genome_list,
                 ++copy_number){
             
             // copy the sequences in the specified number of times
-            append(seqs, temp_seqs);
-            
             // add the correct copy number to accession
             // add it to the first space as SAM etc truncate at the first
             // space of the accession
@@ -254,15 +256,11 @@ std::string prepareMetagenome(TStrList genome_list,
 
                 appendValue(ids_with_copy_number, id_with_copy.str());
             }
-            append(ids, ids_with_copy_number);
+
+            writeRecords(seqFileOut, ids_with_copy_number, temp_seqs);
         }
 
     }
-
-    // dump artificial metagenome to single fasta file
-    std::string metagenome_fp = output_name + "_synthetic_metagenome.fasta";
-    seqan::SeqFileOut seqFileOut (metagenome_fp.c_str());
-    writeRecords(seqFileOut, ids, seqs);
 
     return metagenome_fp;
 
@@ -343,13 +341,17 @@ TAnnotationMap readAmrAnnotations(
 
                 split_line = split(line, '\t');
                     
-                    AmrAnnotation annotation {split(split_line[1], '_')[0],
-                                               split_line[10],
-                                               split_line[8],
-                                               split_line[5],
-                                               stoui32(split_line[2]),
-                                               stoui32(split_line[3]),
-                                               split_line[4].c_str()[0]};
+                    //remove just the copy number from the contig name
+                    std::string contig_name = split_line[1].substr(0, 
+                                              split_line[1].find_last_of("_"));
+
+                    AmrAnnotation annotation {contig_name,
+                                              split_line[10],
+                                              split_line[11],
+                                              split_line[5],
+                                              stoui32(split_line[2]),
+                                              stoui32(split_line[3]),
+                                              split_line[4].c_str()[0]};
                     annotations.push_back(annotation);
                 }
             } else {
@@ -439,10 +441,7 @@ void createLabels(TAnnotationMap annotations,
             std::string contig_name = contig_name_ss.str();
             
             // strip out contig copy number indicator
-            std::string first_part = contig_name.substr(0, 
-                                               contig_name.find_first_of(" "));
-
-            std::string contig_without_copy = first_part.substr(0, 
+            std::string contig_without_copy = contig_name.substr(0, 
                                                 contig_name.find_last_of("_"));
 
             for (auto &annotation : annotations[contig_without_copy]){
@@ -469,8 +468,8 @@ void createLabels(TAnnotationMap annotations,
             
             // print the labels
             if (labels.size() == 0) {
-                labels_fh << "na" << "\t"
-                    << "na" << "\t"
+                labels_fh << bam_record.qName << "\t"
+                    << contig_name << "\t"
                     << "na" << "\t"
                     << "na" << "\t"
                     << "na" << "\t"
@@ -543,17 +542,37 @@ void getCleanReads(std::string output_name){
 
     std::string label;
     std::string overlap;
-    
-    while (!atEnd(seqFileIn)) {
-        readRecord(id, seq, qual, seqFileIn);
-        getline(output_labels, label); 
+    std::string id_string;
+   
+    // get first read
+    readRecord(id, seq, qual, seqFileIn);
+    id_string = seqan::toCString(id);
 
-        TStrList label_data = split(label, '\t');
-        // if actually labelled
-        if(label_data[0].compare("na") != 0){
-            writeRecord(seqFileOut, id, seq, qual);
-            clean_labels << label << std::endl;
+    // get first label
+    getline(output_labels, label); 
+    TStrList label_data = split(label, '\t');
+       
+    // loop over reads 
+    while (!atEnd(seqFileIn)) {
+        
+        // loop over all annotations applying to the same read
+        // i.e. the same read can have multiple annotations
+        while(label_data[0] == id_string){
+
+            // if actually labelled write to clean files
+            if(label_data[2] != "na"){
+                writeRecord(seqFileOut, id, seq, qual);
+                clean_labels << label << std::endl;
+            }
+            
+            
+            // once we've done the first annotation grab the next one
+            getline(output_labels, label); 
+            label_data = split(label, '\t');
         }
+
+        readRecord(id, seq, qual, seqFileIn);
+        id_string = seqan::toCString(id);
     }
     clean_labels.close();
 }
