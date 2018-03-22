@@ -10,7 +10,7 @@ SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++14 -pthread")
 # versioning
 set(AMRtime_VERSION_MAJOR 0)
 set(AMRtime_VERSION_MINOR 0)
-set(AMRtime_VERSION_PATCH 1)
+set(AMRtime_VERSION_PATCH 2)
 set(AMRtime_VERSION "${AMRtime_VERSION_MAJOR}.${AMRtime_VERSION_MINOR}.${AMRtime_VERSION_PATCH}")
 
 # include_dirs

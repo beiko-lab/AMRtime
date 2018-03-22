@@ -72,7 +72,7 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
 
     setVersion(parser, AMRtime_VERSION);
 
-    setDate(parser, "January 2018");
+    setDate(parser, "March 2018");
 
     addUsageLine(parser, "[\\fIOPTIONS\\fP] \\fIData_File.tsv\\fP");
 
@@ -143,7 +143,6 @@ seqan::ArgumentParser::ParseResult parseGenerateArgs(GenerateOptions& options,
     
     // read data file 
     if (data_fh.is_open()){
-        std::getline(data_fh, line);
         while (std::getline(data_fh, line)){
                 split_line = split(line, '\t');
 
