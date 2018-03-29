@@ -94,3 +94,18 @@ only containing data from reads that are labelled:
 
 - `output_clean_labels.tsv` only the labels associated with those reads.
 
+## Docker
+
+First either pull the pre-built container from dockerhub:
+
+`docker pull finlaymaguire/amrtime`
+
+
+Or alternatively build yourself:
+
+`git clone https://github.com/beiko-lab/AMRtime`
+`docker build -t finlaymaguire/amrtime AMRtime`
+
+Then you can mount a local directory and run interactively within the container e.g. to mount a local directory called `amrtime_data` in your current directory to /data within the container and then start a bash shell in the container:
+
+`docker run -i -v $PWD/amrtime_data:/data -t --entrypoint /bin/bash finlaymaguire/amrtime`

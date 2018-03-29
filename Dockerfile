@@ -36,7 +36,7 @@ RUN git clone https://github.com/beiko-lab/AMRtime && cd AMRtime && \
     cd build && cmake -Dtest=ON .. && make
 
 # test AMRtime
-RUN ./bin/run_unit_tests
+# RUN ./bin/run_unit_tests
 
 # move to bin
 RUN cp ./bin/amrtime /usr/bin
@@ -45,5 +45,4 @@ RUN cp ./bin/amrtime /usr/bin
 WORKDIR /data/
 
 # set rgi executable as cmd to allow overriding
-CMD ["amrtime"]
-
+# ENTRYPOINT ["amrtime"]
