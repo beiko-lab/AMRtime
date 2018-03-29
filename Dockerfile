@@ -19,7 +19,7 @@ RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
 # install seqan
 ADD http://packages.seqan.de/seqan-library/seqan-library-2.4.0.tar.xz .
 
-RUN tar xvf seqan-library.2.4.0.tar.xz && cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
+RUN tar xvf seqan-library-2.4.0.tar.xz && cp -r seqan-library-2.4.0/include seqan-library-2.4.0/share /usr/local/
 
 # install gtest
 RUN cd /usr/src/gtest && \
@@ -39,7 +39,7 @@ RUN git clone https://github.com/beiko-lab/AMRtime && cd AMRtime && \
 # RUN ./bin/run_unit_tests
 
 # move to bin
-RUN cp ./bin/amrtime /usr/bin
+RUN cp ./AMRtime/build/bin/amrtime /usr/bin
 
 # move to workdir 
 WORKDIR /data/
