@@ -40,8 +40,7 @@ bool operator== (const AmrAnnotation &first, const AmrAnnotation &other) {
                           first.amr_name == other.amr_name,
                           first.cutoff == other.cutoff,
                           first.start == other.start,
-                          first.end == other.end,
-                          first.strand == other.strand};
+                          first.end == other.end};
     // quick sum as comparison
     int sum = std::accumulate(comparison, comparison + 7, 0);
 
