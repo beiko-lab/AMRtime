@@ -4,122 +4,75 @@ import subprocess
 import argparse
 import os
 
+import utils
+import parsers
+
 # how do I make params that only evaluate once again?
 RANDOM_STATE = 42
 
-def get_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument()
+def generate_training_data(card_proteins)
 
-    #train/test mode
-    #card.json used
+    if not os.path.exists('training_data'):
+        os.mkdir('training_data')
 
-class GeneFamilyLevelClassifier():
-    def __init__(self, card, card):
-        self.card = card
+    synthetic_metagenome_fp = 'training_data/card_proteins.fasta'
+    with open(synthetic_metagenome_fp, 'w') as fh:
+        for accession, sequence in card_proteins:
+            fh.write('>{}\n{}\n'.format(accession, sequence))
 
-    def simulate_reads(self):
-        # wait I just called art directly for this when I did it on
-        # veles so just get that code when you access it
-        # art_illumina
+    # generate training data
+    subprocess.check_output('art_illumina -q -na -ef -sam -ss MSv3 -i {} -f 10 -l 250 -rs 42 -o training_data/metagenome'.format(synthetic_metagenome_fp), shell=True)
 
-    def rebalancing(self):
-        """
-        SMOTE with Tomeks link cleaning using imbalanced learning library
-        """
-        pass
+    # build labels
+    subprocess.check_output("grep '^@gb' training_data/metagenome.fq > training_data/read_names")
 
-    def build_X_y(self):
-        pass
+    labels_fh = open('training_data/metagenome_labels.tsv', 'w')
+    with open('training_data/read_names') as fh:
+        for line in fh:
+            line = line.strip().replace('@', '')
+            read_name = line
+            contig_name = '-'.join(line.split('-')[:-1])
 
-    def train(self):
-        #self.X, self.y = self.build_X_y()
+            split_line = line.split('|')
+            aro = split_line[4].replace('ARO:', '')
+            amr_name = '-'.join(split_line[5].split('-')[:-1])
 
+            # as they are all straight from the canonical sequence
+            # and can't partially overlap
+            amr_cutoff = 'Perfect'
+            amr_overlap = '250'
 
-class SubGeneFamilyModel(GeneFamilyLevelClassifier):
-    """
-    Classifier per gene family i.e. attempting to determine a function
-    to map from an arbitrary AMR gene family to the specific set of
-    AROs within that gene family
-    """
-    def __init__(self, gene_family, family_to_aro_map, classifier):
-        if classifier == 'NaiveBayes':
-            from sklearn import naive_bayes
-            # only if features are integers i.e. k-mer encoding maybe not
-            # some of the other encodings... not that k-mers are independent
-            # so violate the assumptions of Naive Bayes
-            self.clf = naive_bayes.MultinomialNB()
-        else:
-            raise NotImplementedError(classifier)
+            labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
+                                       amr_cutoff, amr_overlap]) + '\n')
+    labels_fh.close()
+    print('Labels generated')
 
 
+def prepare_dataset(dataset_fp):
+    from parsers import MultiKModel
+
+    filepath = 'dna2vec-20161219-0153-k3to8-100d-10c-29320Mbp-sliding-Xat.w2v'
+    mk_model = MultiKModel(filepath)
+
+    with open(dataset_fp) as fh:
+        for ix, line in enumerate(fh):
+            if ix % 4 == 1:
+                seq = Read(line.strip(), mk_model)
 
 
-class CARD():
-    def __init__(self, card_json_fp):
-        with open(card_json_fp) as fh:
-            self.card = json.load(card_json_fp)
-            self.version = self.card['_version']
-
-            # to avoid having to except them later when parsing the other
-            # entries
-            del self.card['_version']
-            del self.card['_timestamp']
-            del self.card['_comment']
-
-            self.aro_to_gene_family = build_aro_to_gene_family()
-            self.gene_family_to_aro = build_gene_family_to_aro()
-
-    def build_aro_to_gene_family(self):
-        aro_to_gene_family = {}
-        for card_item in self.card.values():
-            ARO_acc = card_item['ARO_accession']
-
-            # as multiple gene families are possible per ARO
-            # although they are relatively rare so maybe I should talk with
-            # Andrew about making them unique
-            gene_families = []
-            for category in card_item['ARO_category'].values():
-                if category['category_aro_class_name'] == 'AMR Gene Family':
-                    gene_families.append(category['category_aro_name'])
-            aro_to_gene_family.update({ARO_acc: gene_family})
-        return aro_to_gene_family
-
-    def build_gene_family_to_aro(self):
-        gene_family_to_aro = {}
-        for key, value in self.aro_to_gene_family.items():
-            for gene_family in value:
-                if gene_family not in gene_family_to_aro:
-                    gene_family_to_aro.update({gene_family: [key]})
-                else:
-                    gene_family_to_aro[gene_family].append(key)
-        return gene_family_to_aro
 
 
-class Read():
-    """
-    Class to keep the reads encoding nice and tidy
-    """
-    def __init__(self, read_id, read_seq):
-        self.id = read_id
-        self.seq = read_seq
-
-    @param
-    def encoded_seq(self):
-        self.encoded_seq = encoding(self.seq)
-
-    def encoding(self, sequence):
-        """
-        k-mer decomposition might be simplest although might have to be
-        done at the file level in order to represent all k-mers
-        """
 
 if __name__ == '__main__':
 
-    #train mode
-        # get gene family to aro map and reverse
-        # generate_training for card sequences (can add prev later)
-        # parse reads using Read class and labels using split...
+    parser = utils.get_parser()
+    args = parser.parse_args()
+
+    if args.mode == 'train':
+        card = parsers.CARD(args.card_fp)
+        #dataset, labels = generate_data(card.proteins)
+        dataset, labels = 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
+        encode(dataset)
         # encode reads (feature extraction/kmer)
         # rebalance training set
         # 5-fold CV (not bother with test-train split as we have other test-set)
@@ -130,8 +83,8 @@ if __name__ == '__main__':
             #   data-structure? dask?)
             # train model with 5-fold CV
             # add to dictionary keyed by gene family
-
-    #evaluate mode
+    elif args.mode == 'test':
+        pass
         # if read passes DIAMOND filter
         # encode read to kmers/features (maybe do in bulk for efficiency later)
         # run against trained gene family predictor
@@ -139,5 +92,6 @@ if __name__ == '__main__':
         # what is max(y_pred) for read
         # evaluate against that gene family level model in the trained model
         #   dictionary
+
 
 
