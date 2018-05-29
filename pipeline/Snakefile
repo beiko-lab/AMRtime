@@ -1,0 +1,29 @@
+#rule card_canonical_metagenome_input_data:
+#    input:
+#        "card_data/card_canonical/nucleotide_fasta_protein_homolog_model.fasta",
+#        "card_data/card_canonical/nucleotide_fasta_protein_knockout_model.fasta",
+#        "card_data/card_canonical/nucleotide_fasta_protein_overexpression_model.fasta",
+#        "card_data/card_canonical/nucleotide_fasta_protein_variant_model.fasta",
+#        "card_data/card_canonical/nucleotide_fasta_rRNA_gene_variant_model.fasta"
+#    output:
+#        "synthetic_metagenomes/CARD/input_data/card_all_nt_seqs.fasta"
+#    shell:
+#        "mkdir -p synthetic_metagenomes/CARD/input_data",
+#        "cat {input} > {output}"
+#
+#rule card_canonical_metagenome:
+#    input:
+#        "synthetic_metagenomes/CARD/input_data/card_all_nt_seqs.fasta"
+#    output:
+#        "synthetic_metagenomes/CARD/metagenome/CARD_canonical_errFree.sam",
+#        "synthetic_metagenomes/CARD/metagenome/CARD_canonical.sam",
+#        "synthetic_metagenomes/CARD/metagenome/CARD_canonical.fq.gz",
+#        "synthetic_metagenomes/CARD/metagenome/CARD_canonical.tsv"
+#    shell:
+#        "mkdir -p synthetic_metagenomes/CARD/metagenome",
+#        "art_illumina -q -na -ef -sam -ss MSv3 -i {input} -f 100 -l 250 -rs 42 -o data/CARD/metagenome/CARD_canonical",
+#        "grep '^@gb' data/CARD/metagenome/CARD_canonical.tsv > data/CARD/metagenome/read_names",
+#        "python code/make_CARD_canonical_metagenome_labels.py data/CARD/metagenome/read_names data/CARD/metagenome/CARD_canonical.tsv",
+#        "gzip data/CARD/metagenome/CARD_canonical.fq"
+#
+
