@@ -3,14 +3,16 @@
 import subprocess
 import argparse
 import os
+import numpy as np
 
 import utils
 import parsers
 
+
 # how do I make params that only evaluate once again?
 RANDOM_STATE = 42
 
-def generate_training_data(card_proteins)
+def generate_training_data(card_proteins):
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
@@ -21,10 +23,10 @@ def generate_training_data(card_proteins)
             fh.write('>{}\n{}\n'.format(accession, sequence))
 
     # generate training data
-    subprocess.check_output('art_illumina -q -na -ef -sam -ss MSv3 -i {} -f 10 -l 250 -rs 42 -o training_data/metagenome'.format(synthetic_metagenome_fp), shell=True)
+    subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i {} -f 10 -l 250 -rs 42 -o training_data/metagenome'.format(synthetic_metagenome_fp), shell=True)
 
     # build labels
-    subprocess.check_output("grep '^@gb' training_data/metagenome.fq > training_data/read_names")
+    subprocess.check_call("grep '^@gb' training_data/metagenome.fq > training_data/read_names", shell=True)
 
     labels_fh = open('training_data/metagenome_labels.tsv', 'w')
     with open('training_data/read_names') as fh:
@@ -45,22 +47,8 @@ def generate_training_data(card_proteins)
             labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
                                        amr_cutoff, amr_overlap]) + '\n')
     labels_fh.close()
-    print('Labels generated')
 
-
-def prepare_dataset(dataset_fp):
-    from parsers import MultiKModel
-
-    filepath = 'dna2vec-20161219-0153-k3to8-100d-10c-29320Mbp-sliding-Xat.w2v'
-    mk_model = MultiKModel(filepath)
-
-    with open(dataset_fp) as fh:
-        for ix, line in enumerate(fh):
-            if ix % 4 == 1:
-                seq = Read(line.strip(), mk_model)
-
-
-
+    return 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
 
 
 if __name__ == '__main__':
@@ -70,10 +58,29 @@ if __name__ == '__main__':
 
     if args.mode == 'train':
         card = parsers.CARD(args.card_fp)
-        #dataset, labels = generate_data(card.proteins)
+        #dataset, labels = generate_training_data(card.sequences)
+
+        card_proteins = zip([x.strip() for x in open('training_data/accs')],
+                            [x.strip() for x in open('training_data/seqs')])
+        #dataset, labels = generate_training_data(card_proteins)
         dataset, labels = 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
-        encode(dataset)
-        # encode reads (feature extraction/kmer)
+
+
+        # just do tnf encoding
+        #X  =  parsers.read_metagenome(dataset)
+        #np.save('training_data/X', X)
+        X = np.load('training_data/X.npy')
+        aros = parsers.prepare_labels(labels)
+        gene_family_labels = []
+
+        for aro in aros:
+            gene_family_labels.append(card.aro_to_gene_family[aro])
+
+        print(gene_family_labels)
+        #card.aro_to_gene_family
+        #card.gene_family_to_aro
+
+
         # rebalance training set
         # 5-fold CV (not bother with test-train split as we have other test-set)
         # create a dict to store gene family model classes keyed by the gene family
