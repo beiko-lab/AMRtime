@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from sklearn import preprocessing
+from sklearn import model_selection
 
 import subprocess
 import argparse
@@ -74,16 +76,35 @@ if __name__ == '__main__':
         gene_family_labels = []
 
         for aro in aros:
-            gene_family_labels.append(card.aro_to_gene_family[aro])
+            gene_families = card.aro_to_gene_family[aro]
+            gene_family_labels.append(gene_families[0])
 
-        print(gene_family_labels)
-        #card.aro_to_gene_family
-        #card.gene_family_to_aro
+        #le = preprocessing.LabelEncoder()
+        #le.fit(gene_family_labels)
+        #
+        #model_selection.cross_val_score()
+        #
+        #clf = naive
+
 
 
         # rebalance training set
         # 5-fold CV (not bother with test-train split as we have other test-set)
+
         # create a dict to store gene family model classes keyed by the gene family
+        family_models = {}
+        for ix, aro in enumerate(aros):
+            gene_family = card.aro_to_gene_family[aro][0]
+            if gene_family not in family_models:
+                family_models.update({gene_family: {'X': [X[ix,:]],
+                                                    'y': [aro]}
+                                     })
+            else:
+                family_models[gene_family]['X'].append(X[ix,:])
+                family_models[gene_family]['y'].append(aro)
+
+        print(family_models)
+
         # for each gene family in map:
             # parse labels for indices of reads with aros in that family
             # create new x-y for those indices and encoded reads (out-of-core

@@ -33,7 +33,42 @@ class CARD():
             for category in card_item['ARO_category'].values():
                 if category['category_aro_class_name'] == 'AMR Gene Family':
                     gene_families.append(category['category_aro_name'])
+
+            # fix the situations where there are multiple gene families manually
+            if "glycopeptide resistance gene cluster" in gene_families:
+                gene_families.remove('glycopeptide resistance gene cluster')
+            if "fluoroquinolone self resistant parC" in gene_families:
+                gene_families.remove('fluoroquinolone self resistant parC')
+            if "AAC(6')" in gene_families:
+                gene_families = ["AAC(6')"]
+            if 'ATP-binding cassette (ABC) antibiotic efflux pump' in gene_families and 'pmr phosphoethanolamine transferase' in gene_families:
+                gene_families = ['pmr phosphoethanolamine transferase']
+            if 'resistance-nodulation-cell division (RND) antibiotic efflux pump' in gene_families and 'General Bacterial Porin with reduced permeability to beta-lactams' in gene_families:
+                gene_families = ['resistance-nodulation-cell division (RND) antibiotic efflux pump']
+            if "kirromycin self resistant EF-Tu" in gene_families:
+                gene_families.remove('kirromycin self resistant EF-Tu')
+            if 'aminocoumarin self resistant parY' in gene_families:
+                gene_families.remove('aminocoumarin self resistant parY')
+            if 'major facilitator superfamily (MFS) antibiotic efflux pump' in gene_families and 'resistance-nodulation-cell division (RND) antibiotic efflux pump' in gene_families:
+                gene_families = ['efflux pump']
+            if 'major facilitator superfamily (MFS) antibiotic efflux pump' in gene_families and 'ATP-binding cassette (ABC) antibiotic efflux pump' in gene_families:
+                gene_families = ['efflux pump']
+            if 'class C LRA beta-lactamase' in gene_families and 'class D LRA beta-lactamase' in gene_families:
+                gene_families = ['class D/class C beta-lactamase fusion']
+            if 'fluoroquinolone resistant parC' in gene_families and 'fluoroquinolone resistant gyrA' in gene_families:
+                gene_families = ['fluoroquinolone resistant parC']
+            if 'UhpT' in gene_families and 'UhpA' in gene_families:
+                gene_families = ['UhpA']
+
+            if ARO_acc == "3004450":
+                gene_families = ['TRU beta-lactamase']
+            if ARO_acc == "3004294":
+                gene_families = ['BUT beta-lactamase']
+
+
+
             aro_to_gene_family.update({ARO_acc: gene_families})
+
         return aro_to_gene_family
 
     def build_gene_family_to_aro(self):
