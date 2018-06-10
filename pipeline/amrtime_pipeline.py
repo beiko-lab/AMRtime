@@ -73,11 +73,12 @@ if __name__ == '__main__':
         #np.save('training_data/X', X)
         X = np.load('training_data/X.npy')
         aros = parsers.prepare_labels(labels)
-        gene_family_labels = []
+        np.save('training_data/y', aros)
 
+        gene_family_labels = []
         for aro in aros:
-            gene_families = card.aro_to_gene_family[aro]
-            gene_family_labels.append(gene_families[0])
+            gene_family_labels.append(card.aro_to_gene_family[aro])
+
 
         #le = preprocessing.LabelEncoder()
         #le.fit(gene_family_labels)
@@ -92,18 +93,18 @@ if __name__ == '__main__':
         # 5-fold CV (not bother with test-train split as we have other test-set)
 
         # create a dict to store gene family model classes keyed by the gene family
-        family_models = {}
-        for ix, aro in enumerate(aros):
-            gene_family = card.aro_to_gene_family[aro][0]
-            if gene_family not in family_models:
-                family_models.update({gene_family: {'X': [X[ix,:]],
-                                                    'y': [aro]}
-                                     })
-            else:
-                family_models[gene_family]['X'].append(X[ix,:])
-                family_models[gene_family]['y'].append(aro)
+        #family_models = {}
+        #for ix, aro in enumerate(aros):
+        #    gene_family = card.aro_to_gene_family[aro][0]
+        #    if gene_family not in family_models:
+        #        family_models.update({gene_family: {'X': [X[ix,:]],
+        #                                            'y': [aro]}
+        #                             })
+        #    else:
+        #        family_models[gene_family]['X'].append(X[ix,:])
+        #        family_models[gene_family]['y'].append(aro)
 
-        print(family_models)
+        #print(family_models)
 
         # for each gene family in map:
             # parse labels for indices of reads with aros in that family

@@ -21,6 +21,8 @@ class CARD():
             self.aro_to_gene_family = self.build_aro_to_gene_family()
             self.gene_family_to_aro = self.build_gene_family_to_aro()
 
+            self.accessions, self.sequences = self.get_protein_sequences()
+
     def build_aro_to_gene_family(self):
         aro_to_gene_family = {}
         for card_item in self.card.values():
@@ -35,39 +37,85 @@ class CARD():
                     gene_families.append(category['category_aro_name'])
 
             # fix the situations where there are multiple gene families manually
+            # all glycopeptide resistant gene clusters have 2 gene families one
+            # indicating that it is a grgc and the other with its class
+            # for now we are just using the cluster level and will deal with
+            # the specifics at ARO level.
             if "glycopeptide resistance gene cluster" in gene_families:
-                gene_families.remove('glycopeptide resistance gene cluster')
-            if "fluoroquinolone self resistant parC" in gene_families:
-                gene_families.remove('fluoroquinolone self resistant parC')
-            if "AAC(6')" in gene_families:
-                gene_families = ["AAC(6')"]
-            if 'ATP-binding cassette (ABC) antibiotic efflux pump' in gene_families and 'pmr phosphoethanolamine transferase' in gene_families:
-                gene_families = ['pmr phosphoethanolamine transferase']
-            if 'resistance-nodulation-cell division (RND) antibiotic efflux pump' in gene_families and 'General Bacterial Porin with reduced permeability to beta-lactams' in gene_families:
-                gene_families = ['resistance-nodulation-cell division (RND) antibiotic efflux pump']
-            if "kirromycin self resistant EF-Tu" in gene_families:
-                gene_families.remove('kirromycin self resistant EF-Tu')
-            if 'aminocoumarin self resistant parY' in gene_families:
-                gene_families.remove('aminocoumarin self resistant parY')
-            if 'major facilitator superfamily (MFS) antibiotic efflux pump' in gene_families and 'resistance-nodulation-cell division (RND) antibiotic efflux pump' in gene_families:
-                gene_families = ['efflux pump']
-            if 'major facilitator superfamily (MFS) antibiotic efflux pump' in gene_families and 'ATP-binding cassette (ABC) antibiotic efflux pump' in gene_families:
-                gene_families = ['efflux pump']
-            if 'class C LRA beta-lactamase' in gene_families and 'class D LRA beta-lactamase' in gene_families:
+                gene_families = ['glycopeptide resistance gene cluster']
+
+            # this is a fusion protein so can be assigned to a new class
+            if ARO_acc == '3002598':
+                gene_families = ["AAC(6')_ANT(3'')"]
+            if ARO_acc == '3002597':
+                gene_families = ["APH(2'')_AAC(6')"]
+            if ARO_acc in ['3002546', '3002600']:
+                gene_families = ["AAC(3)_AAC(6')"]
+
+            # also a fusion so assigned a new fusion class
+            if 'class C LRA beta-lactamase' in gene_families and \
+                    'class D LRA beta-lactamase' in gene_families:
                 gene_families = ['class D/class C beta-lactamase fusion']
-            if 'fluoroquinolone resistant parC' in gene_families and 'fluoroquinolone resistant gyrA' in gene_families:
+
+            # 23S with multiple resistance classes
+            if ARO_acc == '3004181':
+                gene_families = ['23S rRNA with mutation conferring resistance '
+                                 'to macrolide and streptogramins antibiotics']
+
+            # additional self-resistance class to indicate resistance genes made by
+            # antibiotic producer removing the self resistant term
+            if "fluoroquinolone resistant parC" in gene_families and \
+                    "fluoroquinolone self resistant parC" in gene_families:
                 gene_families = ['fluoroquinolone resistant parC']
+
+            if "kirromycin self resistant EF-Tu" in gene_families and \
+                    'elfamycin resistant EF-Tu' in gene_families:
+                gene_families = ['elfamycin resistant EF-Tu']
+
+            if 'aminocoumarin self resistant parY' in gene_families and \
+                    'aminocoumarin resistant parY' in gene_families:
+                gene_families = ['aminocoumarin resistant parY']
+
+            # efflux components
+            if ARO_acc in ['3000263', '3000833', '3003382', '3000832',
+                           '3000815', '3003896', '3000823', '3003511',
+                           '3003381', '3000817', '3003895', '3000676',
+                           '3003383', '3003585', '3004107', '3003820']:
+                gene_families = ['efflux regulator']
+            if ARO_acc == '3000237':
+                gene_families = ['efflux component']
+
+
+            # They are homologous parts of topo IV and II but it looks like this is actually parC
+            if 'fluoroquinolone resistant parC' in gene_families and \
+                    'fluoroquinolone resistant gyrA' in gene_families:
+                gene_families = ['fluoroquinolone resistant parC']
+
+
+            # things that need fixed
+            # this looks like a mistake and is only UhpA
             if 'UhpT' in gene_families and 'UhpA' in gene_families:
                 gene_families = ['UhpA']
 
+            # missing families
             if ARO_acc == "3004450":
                 gene_families = ['TRU beta-lactamase']
             if ARO_acc == "3004294":
                 gene_families = ['BUT beta-lactamase']
 
-
-
             aro_to_gene_family.update({ARO_acc: gene_families})
+
+        # tidy up and make unique aro:amr family relationship
+        mapping_failure = False
+        for aro, gene_families in aro_to_gene_family.items():
+            if len(gene_families) != 1:
+                mapping_failure = True
+                print(aro, gene_families)
+            else:
+                aro_to_gene_family[aro] = gene_families[0]
+
+        if mapping_failure:
+            raise ValueError("AROs and gene families don't map 1:1")
 
         return aro_to_gene_family
 
@@ -86,58 +134,24 @@ class CARD():
         Gather list of accession, sequence tuples from the card.json
         """
         # from rgi
-        """
-        for i in j:
+
+        accessions = []
+        sequences = []
+
+        for card_item in self.card.values():
 	    # model_type: protein homolog model
-	    if j[i]['model_type_id'] == '40292':
-                pass_bit_score = j[i]['model_param']['blastp_bit_score']['param_value']
+            if card_item['model_type_id'] in ['40292', '40293', '41091']:
 
-                for seq in j[i]['model_sequences']['sequence']:
-                    fout.write('>%s_%s | model_type_id: 40292 | pass_bitscore: %s | %s\n' % (i, seq, pass_bit_score, j[i]['ARO_name']))
-	            fout.write('%s\n' %(j[i]['model_sequences']['sequence'][seq]['protein_sequence']['sequence']))
+                for sequence_data in card_item['model_sequences']['sequence'].values():
+                    accessions.append("ARO:{}|{}".format(card_item['ARO_id'],
+                                                         card_item['ARO_name']))
+                    seq = sequence_data['dna_sequence']['sequence']
+                    #if sequence_data['dna_sequence']['strand'] == '-':
+                    #    seq = self.base_complement(seq)
+                    sequences.append(seqs)
 
-	        	# model_type: protein variant model
-            elif j[i]["model_type_id"] == "40293":
-                pass_bit_score = j[i]['model_param']['blastp_bit_score']['param_value']
-                snpList = [j[i]['model_param']['snp']['param_value'][k] for k in j[i]['model_param']['snp']['param_value']]
-                for seq in j[i]['model_sequences']['sequence']:
-	            fout.write('>%s_%s | model_type_id: 40293 | pass_bit_score: %s | SNP: %s | %s\n' \
-	                            % (i, seq, pass_bit_score, ','.join(snpList), j[i]['ARO_name']))
-                    fout.write('%s\n' % (j[i]['model_sequences']['sequence'][seq]['protein_sequence']['sequence']))
+        return accessions, sequences
 
-	        	# model_type: protein overexpression model
-            elif j[i]["model_type_id"] == "41091":
-                pass_bit_score = j[i]["model_param"]["blastp_bit_score"]["param_value"]
-                snpList = [j[i]['model_param']['snp']['param_value'][k] for k in j[i]['model_param']['snp']['param_value']]
-                for seq in j[i]['model_sequences']['sequence']:
-	            fout.write('>%s_%s | model_type_id: 41091 | pass_bit_score: %s | SNP: %s | %s\n' \
-	                        % (i, seq, pass_bit_score, ','.join(snpList), j[i]['ARO_name']))
-                    fout.write('%s\n' % (j[i]['model_sequences']['sequence'][seq]['protein_sequence']['sequence']))
-
-
-            elif j[i]["model_type_id"] == "40295":
-                pass_bit_score = j[i]['model_param']['blastn_bit_score']['param_value']
-                snpList = [j[i]['model_param']['snp']['param_value'][k] for k in j[i]['model_param']['snp']['param_value']]
-	        for s in snpList:
-	            if "16S" in j[i]['ARO_name']:
-	                if s not in snpList_16s:
-                            snpList_16s.append(s)
-                    if "23S" in j[i]['ARO_name']:
-	                if s not in snpList_23s:
-                            snpList_23s.append(s)
-
-                    for seq in j[i]['model_sequences']['sequence']:
-	                if j[i]['model_sequences']['sequence'][seq]['dna_sequence']['strand'] == "-":
-                            basecomplement = self.complementary_strand(j[i]['model_sequences']['sequence'][seq]['dna_sequence']['sequence'])
-                            fout.write('>%s_%s | model_type_id: 40295 | pass_bit_score: %s | SNP: %s | %s\n' \
-	    	                    % (i, seq, pass_bit_score, ','.join(snpList), j[i]['ARO_name']))
-                            fout.write('%s\n' % (basecomplement))
-
-	    	    else:
-	    	        fout.write('>%s_%s | model_type_id: 40295 | pass_bit_score: %s | SNP: %s | %s\n' \
-	    	                    % (i, seq, pass_bit_score, ','.join(snpList), j[i]['ARO_name']))
-                            fout.write('%s\n' % (j[i]['model_sequences']['sequence'][seq]['dna_sequence']['sequence']))
-        """
 
 def read_metagenome(fp):
     """
