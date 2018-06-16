@@ -18,10 +18,30 @@ class CARD():
             del self.card['_timestamp']
             del self.card['_comment']
 
+            """
+            All models currently in card.json:
+                {'efflux pump system meta-model',
+                'gene cluster meta-model',
+                'protein domain meta-model',
+                'protein homolog model',
+                'protein knockout model',
+                'protein overexpression model',
+                'protein variant model',
+                'rRNA gene variant model'}
+
+            rRNA is being handled by metaRNA approach
+
+            Other metamodels can be added later
+            """
+
+
+            self.supported_models = ['protein homolog model',
+                                     'protein variant model']
+
+
             self.aro_to_gene_family = self.build_aro_to_gene_family()
             self.gene_family_to_aro = self.build_gene_family_to_aro()
-
-            self.accessions, self.sequences = self.get_protein_sequences()
+            self.proteins, self.nucleotides = self.get_sequences()
 
     def build_aro_to_gene_family(self):
         aro_to_gene_family = {}
@@ -129,28 +149,49 @@ class CARD():
                     gene_family_to_aro[gene_family].append(key)
         return gene_family_to_aro
 
-    def get_protein_sequences(self):
+    def get_sequences(self):
         """
-        Gather list of accession, sequence tuples from the card.json
+        Gather list of accession, prot and nucleotide sequence tuples from
+        the card.json
         """
-        # from rgi
-
-        accessions = []
-        sequences = []
-
+        data = {'protein_sequence': {}, 'dna_sequence': {}}
         for card_item in self.card.values():
-	    # model_type: protein homolog model
-            if card_item['model_type_id'] in ['40292', '40293', '41091']:
+            if card_item['model_type'] in self.supported_models:
+                aro = card_item['ARO_accession']
+                aro_name = card_item['ARO_name']
+                sequences = card_item['model_sequences']['sequence']
 
-                for sequence_data in card_item['model_sequences']['sequence'].values():
-                    accessions.append("ARO:{}|{}".format(card_item['ARO_id'],
-                                                         card_item['ARO_name']))
-                    seq = sequence_data['dna_sequence']['sequence']
-                    #if sequence_data['dna_sequence']['strand'] == '-':
-                    #    seq = self.base_complement(seq)
-                    sequences.append(seqs)
+                for seq_ix in sequences:
+                    for sequence_type in sequences[seq_ix]:
+                        if sequence_type in ['protein_sequence', 'dna_sequence']:
+                            sequence = sequences[seq_ix][sequence_type]
+                            if aro not in data[sequence_type]:
+                                acc = ">gb|{}|{}|{}".format(sequence['accession'],
+                                                            aro,
+                                                            aro_name)
+                                data[sequence_type].update({aro: [(acc,
+                                                                   sequence['sequence'])]})
 
-        return accessions, sequences
+                            else:
+                                data[sequence_type][aro].append((acc,
+                                                                 sequence['sequence']))
+
+        return data['protein_sequence'], data['dna_sequence']
+
+     def write_seqs(self, seq_dict, seq_file_fp):
+         if not os.path.exists(seq_file_fp):
+             with open(seq_file_fp, 'w') as fh:
+                 for aro_seqs in seq_dict.values():
+                     for seq in aro_seqs:
+                         fh.write("{}\n{}\n".format(seq[0], seq[1])
+
+     def write_proteins(self, seq_file_fp):
+         self.write_seqs(self.proteins, seq_file_fp)
+
+     def write_nucleoties(self, seq_file_fp):
+         self.write_seqs(self.nucleotide, seq_file_fp)
+
+
 
 
 def read_metagenome(fp):
