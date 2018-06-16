@@ -7,8 +7,8 @@ import argparse
 import os
 import numpy as np
 
-import utils
-import parsers
+from amrtime import utils
+from amrtime import parsers
 
 
 # how do I make params that only evaluate once again?

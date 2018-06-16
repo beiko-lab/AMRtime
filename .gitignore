@@ -44,3 +44,7 @@ build/
 
 # vim files
 *.sw*
+
+# python files
+*.pyc
+__pycache__
