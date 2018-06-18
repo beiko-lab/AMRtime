@@ -14,41 +14,45 @@ from amrtime import parsers
 # how do I make params that only evaluate once again?
 RANDOM_STATE = 42
 
-def generate_training_data(card_proteins):
+def generate_training_data(card):
+
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
 
-    synthetic_metagenome_fp = 'training_data/card_proteins.fasta'
-    with open(synthetic_metagenome_fp, 'w') as fh:
-        for accession, sequence in card_proteins:
-            fh.write('>{}\n{}\n'.format(accession, sequence))
+    if not os.path.exists('training_data/card_proteins.faa'):
+        card.write_proteins('training_data/card_proteins.faa')
+
+    if not os.path.exists('training_data/card_nucleotides.fna'):
+        card.write_nucleoties('training_data/card_nucleotides.fna')
 
     # generate training data
-    subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i {} -f 10 -l 250 -rs 42 -o training_data/metagenome'.format(synthetic_metagenome_fp), shell=True)
+    if not os.path.exists('training_data/metagenome.fq'):
+        subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i training_data/card_nucleotides.fna -f 10 -l 250 -rs 42 -o training_data/metagenome', shell=True)
 
     # build labels
-    subprocess.check_call("grep '^@gb' training_data/metagenome.fq > training_data/read_names", shell=True)
+    if not os.path.exists('training_data/metagenome_labels.tsv'):
+        subprocess.check_call("grep '^@gb' training_data/metagenome.fq > training_data/read_names", shell=True)
 
-    labels_fh = open('training_data/metagenome_labels.tsv', 'w')
-    with open('training_data/read_names') as fh:
-        for line in fh:
-            line = line.strip().replace('@', '')
-            read_name = line
-            contig_name = '-'.join(line.split('-')[:-1])
+        labels_fh = open('training_data/metagenome_labels.tsv', 'w')
+        with open('training_data/read_names') as fh:
+            for line in fh:
+                line = line.strip().replace('@', '')
+                read_name = line
+                contig_name = '-'.join(line.split('-')[:-1])
 
-            split_line = line.split('|')
-            aro = split_line[4].replace('ARO:', '')
-            amr_name = '-'.join(split_line[5].split('-')[:-1])
+                split_line = line.split('|')
+                aro = split_line[2]
+                amr_name = '-'.join(split_line[3].split('-')[:-1])
 
-            # as they are all straight from the canonical sequence
-            # and can't partially overlap
-            amr_cutoff = 'Perfect'
-            amr_overlap = '250'
+                # as they are all straight from the canonical sequence
+                # and can't partially overlap
+                amr_cutoff = 'Perfect'
+                amr_overlap = '250'
 
-            labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
-                                       amr_cutoff, amr_overlap]) + '\n')
-    labels_fh.close()
+                labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
+                                           amr_cutoff, amr_overlap]) + '\n')
+        labels_fh.close()
 
     return 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
 
@@ -60,20 +64,19 @@ if __name__ == '__main__':
 
     if args.mode == 'train':
         card = parsers.CARD(args.card_fp)
-        #dataset, labels = generate_training_data(card.sequences)
+        dataset, labels = generate_training_data(card)
 
-        card_proteins = zip([x.strip() for x in open('training_data/accs')],
-                            [x.strip() for x in open('training_data/seqs')])
-        #dataset, labels = generate_training_data(card_proteins)
-        dataset, labels = 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
+        #card_proteins = zip([x.strip() for x in open('training_data/accs')],
+        #                    [x.strip() for x in open('training_data/seqs')])
+        #dataset, labels = 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
 
 
         # just do tnf encoding
         #X  =  parsers.read_metagenome(dataset)
         #np.save('training_data/X', X)
-        X = np.load('training_data/X.npy')
-        aros = parsers.prepare_labels(labels)
-        np.save('training_data/y', aros)
+        #X = np.load('training_data/X.npy')
+        #aros = parsers.prepare_labels(labels)
+        #np.save('training_data/y', aros)
 
         gene_family_labels = []
         for aro in aros:

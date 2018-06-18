@@ -4,6 +4,7 @@ import json
 import itertools
 import numpy as np
 import re
+import os
 
 class CARD():
     def __init__(self, card_json_fp):
@@ -178,18 +179,18 @@ class CARD():
 
         return data['protein_sequence'], data['dna_sequence']
 
-     def write_seqs(self, seq_dict, seq_file_fp):
-         if not os.path.exists(seq_file_fp):
-             with open(seq_file_fp, 'w') as fh:
-                 for aro_seqs in seq_dict.values():
-                     for seq in aro_seqs:
-                         fh.write("{}\n{}\n".format(seq[0], seq[1])
+    def write_seqs(self, seq_dict, seq_file_fp):
+        if not os.path.exists(seq_file_fp):
+            with open(seq_file_fp, 'w') as fh:
+                for aro_seqs in seq_dict.values():
+                    for seq in aro_seqs:
+                        fh.write("{}\n{}\n".format(seq[0], seq[1]))
 
-     def write_proteins(self, seq_file_fp):
-         self.write_seqs(self.proteins, seq_file_fp)
+    def write_proteins(self, seq_file_fp):
+        self.write_seqs(self.proteins, seq_file_fp)
 
-     def write_nucleoties(self, seq_file_fp):
-         self.write_seqs(self.nucleotide, seq_file_fp)
+    def write_nucleoties(self, seq_file_fp):
+        self.write_seqs(self.nucleotides, seq_file_fp)
 
 
 
