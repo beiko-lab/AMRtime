@@ -193,25 +193,6 @@ class CARD():
         self.write_seqs(self.nucleotides, seq_file_fp)
 
 
-
-
-def read_metagenome(fp):
-    """
-    Prepare metagenome
-    """
-    tnf = ["".join(x) for x in itertools.product(['A', 'T', 'G', 'C', 'N'], repeat=4)]
-    tnf_encoder = {v:k for k,v in enumerate(tnf)}
-
-    X = []
-    with open(fp) as fh:
-        for ix, line in enumerate(fh):
-            if ix % 4 == 1:
-                seq = Read(line.strip())
-                encoded_seq = seq.encode(tnf_encoder)
-                X.append(encoded_seq)
-    return np.vstack(X)
-
-
 def prepare_labels(fp):
     aros = []
     with open(fp) as fh:
@@ -219,33 +200,4 @@ def prepare_labels(fp):
             aro = line.split()[2]
             aros.append(aro)
     return aros
-
-
-class Read():
-    """
-    Class to keep the reads encoding nice and tidy
-    """
-    def __init__(self, read_seq):
-        self.seq = re.sub("[M,X,R,S,Y,K]", 'N', read_seq)
-
-    def encode(self, tnf):
-        """
-        k-mer decomposition might be simplest although might have to be
-        done at the file level in order to represent all k-mers
-        """
-        encoded_vec = np.zeros(len(tnf))
-        for tetranucleotide in self.window(4):
-            encoded_vec[tnf[tetranucleotide]] += 1
-        return encoded_vec
-
-    def window(self, window_size):
-        "Returns a sliding window (of width w) over data from the iterable"
-        "   s -> (s0,s1,...s[w-1]), (s1,s2,...,sw), ...                   "
-        it = iter(self.seq)
-        result = tuple(itertools.islice(it, window_size))
-        if len(result) == window_size:
-            yield "".join(result)
-        for elem in it:
-            result = result[1:] + (elem,)
-            yield "".join(result)
 

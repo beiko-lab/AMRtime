@@ -9,13 +9,13 @@ import numpy as np
 
 from amrtime import utils
 from amrtime import parsers
+from amrtime import encoding
 
 
 # how do I make params that only evaluate once again?
 RANDOM_STATE = 42
 
 def generate_training_data(card):
-
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
@@ -28,7 +28,7 @@ def generate_training_data(card):
 
     # generate training data
     if not os.path.exists('training_data/metagenome.fq'):
-        subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i training_data/card_nucleotides.fna -f 10 -l 250 -rs 42 -o training_data/metagenome', shell=True)
+        subprocess.check_call('./art_illumina -q -na -ef -sam -ss MSv3 -i training_data/card_nucleotides.fna -f 2 -l 250 -rs 42 -o training_data/metagenome', shell=True)
 
     # build labels
     if not os.path.exists('training_data/metagenome_labels.tsv'):
@@ -66,10 +66,13 @@ if __name__ == '__main__':
         card = parsers.CARD(args.card_fp)
         dataset, labels = generate_training_data(card)
 
-        #card_proteins = zip([x.strip() for x in open('training_data/accs')],
-        #                    [x.strip() for x in open('training_data/seqs')])
-        #dataset, labels = 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
+        # run diamond filter to get
+        homology_encoding = encoding.Homology(dataset, 'training_data/card_proteins.faa')
+        X_sim = homology_encoding.encode(card)
+        X_dissim = homology_encoding.encode(card, dissimilarity=True)
 
+        tnf = encoding.TNF('training_data/metagenome.fq')
+        X_tnf = tnf.encode()
 
         # just do tnf encoding
         #X  =  parsers.read_metagenome(dataset)
@@ -78,9 +81,9 @@ if __name__ == '__main__':
         #aros = parsers.prepare_labels(labels)
         #np.save('training_data/y', aros)
 
-        gene_family_labels = []
-        for aro in aros:
-            gene_family_labels.append(card.aro_to_gene_family[aro])
+        #gene_family_labels = []
+        #for aro in aros:
+        #    gene_family_labels.append(card.aro_to_gene_family[aro])
 
 
         #le = preprocessing.LabelEncoder()
