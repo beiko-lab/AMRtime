@@ -48,6 +48,7 @@ class Homology():
                 read_acc = read.strip().replace('@gb', 'gb')
                 sim_vector = np.zeros(len(amr_family_field))
                 gene_family_encoding.update({read_acc : sim_vector})
+        print(len(gene_family_encoding))
 
         for alignment in alignment_fh:
             alignment = alignment.strip().split('\t')

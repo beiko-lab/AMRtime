@@ -2,6 +2,8 @@
 from sklearn import preprocessing
 from sklearn import model_selection
 
+import pandas as pd
+
 import subprocess
 import argparse
 import os
@@ -62,6 +64,11 @@ if __name__ == '__main__':
     parser = utils.get_parser()
     args = parser.parse_args()
 
+    # ugh having an issue where the same sequence is appearing multiple times
+    # in the card dna sequences thus leading to a mismatch in sequence number
+    # when I key on accession during encoding/
+    # why are the same sequences in card.dna_sequences multiple times?
+    # have I fucked up my code or is that a thing in the CARD database
     if args.mode == 'train':
         card = parsers.CARD(args.card_fp)
         dataset, labels = generate_training_data(card)
@@ -71,27 +78,37 @@ if __name__ == '__main__':
         X_sim = homology_encoding.encode(card)
         X_dissim = homology_encoding.encode(card, dissimilarity=True)
 
-        tnf = encoding.TNF('training_data/metagenome.fq')
-        X_tnf = tnf.encode()
+        #tnf = encoding.TNF('training_data/metagenome.fq')
+        #X_tnf = tnf.encode()
 
-        # just do tnf encoding
-        #X  =  parsers.read_metagenome(dataset)
         #np.save('training_data/X', X)
         #X = np.load('training_data/X.npy')
-        #aros = parsers.prepare_labels(labels)
-        #np.save('training_data/y', aros)
+        aros = parsers.prepare_labels(labels, card)
+        np.save('training_data/y', aros)
+        y = np.load('training_data/y.npy')
+        print(y)
 
-        #gene_family_labels = []
-        #for aro in aros:
-        #    gene_family_labels.append(card.aro_to_gene_family[aro])
+        le = preprocessing.LabelEncoder()
+        le.fit(y)
 
+        #X_sim = pd.read_pickle('test_diamond_norm').as_matrix()
+        #X_dissim = pd.read_pickle('test_diamond_norm_dissim').as_matrix()
 
-        #le = preprocessing.LabelEncoder()
-        #le.fit(gene_family_labels)
-        #
+        print(y.shape)
+        print(X_sim.shape)
+        print(X_dissim.shape)
         #model_selection.cross_val_score()
-        #
-        #clf = naive
+        #cv = model_selection.StratifiedKFold(n_splits=5, shuffle=True)
+        #for train_index, test_index in cv.split(X_sim, y):
+        #    clf = GaussianNB()
+        #    clf.fit(X_sim[train_index], y[train_index])
+        #    score = clf.score(X_sim[test_index], y[test_index])
+        #    print(score)
+
+        #for train_index, test_index in cv.split(X_dissim, y):
+        #    clf.fit(X_dissim[train_index], y[train_index])
+        #    score = clf.score(X_dissim[test_index], y[test_index])
+        #    print(score)
 
 
 

@@ -193,11 +193,13 @@ class CARD():
         self.write_seqs(self.nucleotides, seq_file_fp)
 
 
-def prepare_labels(fp):
+def prepare_labels(fp, card):
     aros = []
     with open(fp) as fh:
         for line in fh:
             aro = line.split()[2]
-            aros.append(aro)
+            family = card.aro_to_gene_family[aro]
+            aros.append(family)
+
     return aros
 
