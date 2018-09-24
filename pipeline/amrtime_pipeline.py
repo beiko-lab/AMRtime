@@ -15,20 +15,20 @@ def train(args):
     dataset, labels = model.generate_training_data(card)
     data = model.prepare_data(dataset, labels, card)
 
-    #family_classifier = model.GeneFamilyLevelClassifier(data['train']['family']['X'],
-    #                                                          data['train']['family']['y'],
-    #                                                          card)
+    family_classifier = model.GeneFamilyLevelClassifier(data['train']['family']['X'],
+                                                              data['train']['family']['y'],
+                                                              card)
 
-    #family_classifier.train()
+    family_classifier.train()
 
     aro_classifiers = model.SubGeneFamilyModel(data['train']['aro']['X'],
                                                data['train']['aro']['y'],
                                                card)
 
     aro_classifiers.train()
-    #model.score(family_classifier.clf, aro_classifiers.family_level_classifiers,
-    #        data['test']['family']['X'], data['test']['family']['y'],
-    #        data['test']['aro']['X'], data['test']['aro']['y'])
+    model.score(family_classifier.clf, aro_classifiers.family_level_classifiers,
+            data['train']['family']['X'], data['train']['family']['y'],
+            data['train']['aro']['X'], data['train']['aro']['y'])
 
 
 

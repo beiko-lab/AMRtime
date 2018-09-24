@@ -10,9 +10,13 @@ from sklearn import model_selection
 from sklearn import ensemble
 from sklearn import preprocessing
 from sklearn import dummy
+from sklearn import metrics
+from sklearn.externals import joblib
+import pickle
 
 from amrtime import encoding
 from amrtime import parsers
+from amrtime import utils
 
 class GeneFamilyLevelClassifier():
     def __init__(self, X_family_train, y_family_train, card):
@@ -23,12 +27,16 @@ class GeneFamilyLevelClassifier():
     def train(self):
         print("Training Family Classifier")
         print("Rebalancing Data")
-        X_resampled, y_resampled = SMOTE(kind='borderline1').fit_sample(self.X,
-                                                                        self.y)
-        print("Training Model")
-        clf = ensemble.RandomForestClassifier()
-        clf.fit(X_resampled, y_resampled)
-        self.clf = clf
+        if os.path.exists('models/family.pkl'):
+            self.clf = joblib.load('models/family.pkl')
+        else:
+            X_resampled, y_resampled = SMOTE(kind='borderline1').fit_sample(self.X,
+                                                                            self.y)
+            print("Training Model")
+            clf = ensemble.RandomForestClassifier()
+            clf.fit(X_resampled, y_resampled)
+            joblib.dump(clf, 'models/family.pkl')
+            self.clf = clf
 
 
 class SubGeneFamilyModel(GeneFamilyLevelClassifier):
@@ -50,6 +58,7 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier):
         family_level_classifiers = {}
         for family in tqdm(self.card.gene_family_to_aro.keys()):
 
+            family_name = family.replace(' ', '_').replace('/', '_')
             # get all the aros relevant to the family
             family_aros = self.card.gene_family_to_aro[family]
 
@@ -67,19 +76,27 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier):
             # current family being trained
             X_train = X_train.iloc[label_indices]
 
+            if os.path.exists('models/{}.pkl'.format(family_name)):
+                family_clf = joblib.load('models/{}.pkl'.format(family_name))
+                family_level_classifiers.update({family: [family_clf, family_aros]})
+                continue
+
             # i.e. if family only has a single member
             if len(family_aros) == 1:
-                clf = dummy.DummyClassifier(strategy='constant', constant=family_aros[0])
-                clf.fit(X_train, y_train)
+                family_clf = dummy.DummyClassifier(strategy='constant', constant=family_aros[0])
+                family_clf.fit(X_train, y_train)
+
+                joblib.dump(family_clf, 'models/{}.pkl'.format(family_name))
                 family_level_classifiers.update({family: [family_clf, family_aros]})
             else:
                 # rebalance using SMOTE
                 X_resampled, y_resampled = SMOTE(kind='borderline1').fit_sample(X_train, y_train)
 
-                family_clf = ensemble.RandomForestClassifier(weight='balanced_subsample')
+                family_clf = ensemble.RandomForestClassifier()
 
                 family_clf.fit(X_resampled, y_resampled)
 
+                joblib.dump(family_clf, 'models/{}.pkl'.format(family_name))
                 family_level_classifiers.update({family: [family_clf, family_aros]})
 
         self.family_level_classifiers = family_level_classifiers
@@ -129,7 +146,8 @@ def generate_training_data(card):
     return 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
 
 
-def split_data(X_aro, aro_labels, X_family, amr_family_labels):
+def split_data(X_aro, aro_labels, aro_encoder,
+               X_family, amr_family_labels, family_encoder):
     """
     Stratified split on AROs
     """
@@ -161,19 +179,22 @@ def split_data(X_aro, aro_labels, X_family, amr_family_labels):
             'test': {'family': {'X': X_family_test,
                                  'y': y_family_test},
                       'aro': {'X': X_aro_test,
-                              'y': y_aro_test}}}
+                              'y': y_aro_test}},
+            'encoders' : {'family': family_encoder,
+                           'aro': aro_encoder}}
     return data
 
 
 
-def score(family_clf, family_classifiers, X_family, X_aro, y_family, y_aro):
+def score(family_clf, family_classifiers, X_family, y_family, X_aro, y_aro):
 
         # predict and calculate performance for X
         print('Predicting Families')
         y_family_pred = family_clf.predict(X_family)
-        classification_report_csv(metrics.classification_report(y_family,
+
+        utils.classification_report_csv(metrics.classification_report(y_family,
                                                                 y_family_pred),
-                                  "family")
+                                  "family_test_report.tsv")
 
         y_aro_pred = []
         print('Gather predictions')
@@ -204,9 +225,9 @@ def score(family_clf, family_classifiers, X_family, X_aro, y_family, y_aro):
 
         y_aro_pred = np.hstack(y_aro_pred)
 
-        classification_report_csv(metrics.classification_report(np.array(y_aro)[all_indices],
+        utils.classification_report_csv(metrics.classification_report(np.array(y_aro)[all_indices],
                                                                 y_aro_pred),
-                                  "aros")
+                                  "aro_test_report.tsv")
 
 def prepare_data(dataset, labels, card):
     # run diamond filter to get homology encoding
@@ -235,7 +256,10 @@ def prepare_data(dataset, labels, card):
     le_aro = preprocessing.LabelEncoder()
     le_aro.fit(aro_labels)
 
-    data = split_data(X_aro, aro_labels, X_family, amr_family_labels)
+    data = split_data(X_aro, aro_labels, le_aro, X_family, amr_family_labels,
+                     le_family)
+
+    joblib.dump(data, 'training_data/data.pkl')
 
     return data
 
