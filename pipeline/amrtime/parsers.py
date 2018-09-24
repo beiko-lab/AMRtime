@@ -10,6 +10,9 @@ from Bio import SeqIO
 from Bio.SubsMat.MatrixInfo import blosum62
 
 class CARD():
+    """
+    Parser for the CARD database
+    """
     def __init__(self, card_json_fp, rrna=False):
         with open(card_json_fp) as fh:
             with open(card_json_fp) as fh:

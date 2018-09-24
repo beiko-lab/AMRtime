@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-
 import os
 import argparse
+import pandas as pd
 
 def is_valid_file(parser, arg):
     if not os.path.exists(arg):
@@ -18,4 +18,20 @@ def get_parser():
                          help="Path to CARD json file")
 
     return parser
+
+def classification_report_csv(report, fp):
+    report_data = []
+    lines = report.split('\n')
+    for line in lines[2:-3]:
+        row = {}
+        row_data = line.split('      ')
+        row['class'] = row_data[-5]
+        row['precision'] = float(row_data[-4])
+        row['recall'] = float(row_data[-3])
+        row['f1_score'] = float(row_data[-2])
+        row['support'] = float(row_data[-1])
+        report_data.append(row)
+    dataframe = pd.DataFrame.from_dict(report_data)
+    #print(dataframe)
+    dataframe.to_csv(fp, index = False)
 
