@@ -1,13 +1,19 @@
 #!/usr/bin/env python
 import json
-
+import math
 import itertools
 import numpy as np
+import glob
 import re
 import os
+from Bio import SeqIO
+from Bio.SubsMat.MatrixInfo import blosum62
 
 class CARD():
-    def __init__(self, card_json_fp):
+    """
+    Parser for the CARD database
+    """
+    def __init__(self, card_json_fp, rrna=False):
         with open(card_json_fp) as fh:
             with open(card_json_fp) as fh:
                 self.card = json.load(fh)
@@ -37,12 +43,14 @@ class CARD():
 
 
             self.supported_models = ['protein homolog model',
-                                     'protein variant model']
+                                     'protein variant model',
+                                     'protein overexpression model']
+            if rrna:
+                self.supported_models.append('rRNA gene variant model')
 
-
+            self.proteins, self.nucleotides = self.get_sequences()
             self.aro_to_gene_family = self.build_aro_to_gene_family()
             self.gene_family_to_aro = self.build_gene_family_to_aro()
-            self.proteins, self.nucleotides = self.get_sequences()
 
     def build_aro_to_gene_family(self):
         aro_to_gene_family = {}
@@ -128,6 +136,7 @@ class CARD():
 
         # tidy up and make unique aro:amr family relationship
         mapping_failure = False
+        aros_without_protein = []
         for aro, gene_families in aro_to_gene_family.items():
             if len(gene_families) != 1:
                 mapping_failure = True
@@ -135,19 +144,26 @@ class CARD():
             else:
                 aro_to_gene_family[aro] = gene_families[0]
 
+            if aro not in self.proteins:
+                aros_without_protein.append(aro)
+
         if mapping_failure:
             raise ValueError("AROs and gene families don't map 1:1")
+
+        # remove any aro without a protein sequence
+        for aro in aros_without_protein:
+            del aro_to_gene_family[aro]
 
         return aro_to_gene_family
 
     def build_gene_family_to_aro(self):
         gene_family_to_aro = {}
-        for key, value in self.aro_to_gene_family.items():
-            for gene_family in value:
-                if gene_family not in gene_family_to_aro:
-                    gene_family_to_aro.update({gene_family: [key]})
-                else:
-                    gene_family_to_aro[gene_family].append(key)
+        for aro, gene_family in self.aro_to_gene_family.items():
+            if gene_family not in gene_family_to_aro:
+                gene_family_to_aro.update({gene_family: [aro]})
+            else:
+                gene_family_to_aro[gene_family].append(aro)
+
         return gene_family_to_aro
 
     def get_sequences(self):
@@ -156,35 +172,34 @@ class CARD():
         the card.json
         """
         data = {'protein_sequence': {}, 'dna_sequence': {}}
-        for card_item in self.card.values():
+        for key, card_item in self.card.items():
             if card_item['model_type'] in self.supported_models:
                 aro = card_item['ARO_accession']
                 aro_name = card_item['ARO_name']
                 sequences = card_item['model_sequences']['sequence']
-
                 for seq_ix in sequences:
                     for sequence_type in sequences[seq_ix]:
                         if sequence_type in ['protein_sequence', 'dna_sequence']:
                             sequence = sequences[seq_ix][sequence_type]
                             if aro not in data[sequence_type]:
-                                acc = ">gb|{}|{}|{}".format(sequence['accession'],
-                                                            aro,
-                                                            aro_name)
-                                data[sequence_type].update({aro: [(acc,
-                                                                   sequence['sequence'])]})
-
-                            else:
-                                data[sequence_type][aro].append((acc,
-                                                                 sequence['sequence']))
+                                acc = ">gb|{}|{}|{}|".format(sequence['accession'],
+                                                             aro,
+                                                             aro_name.replace(' ', '_'))
+                                data[sequence_type].update({aro: (acc,
+                                                                  sequence['sequence'])})
+        # what the fuck is happening why are we getting identical sequences
+        # temporarily let's just add the first sequence
+                            #else:
+                            #    data[sequence_type][aro].append((acc,
+                            #                                     sequence['sequence']))
 
         return data['protein_sequence'], data['dna_sequence']
 
     def write_seqs(self, seq_dict, seq_file_fp):
         if not os.path.exists(seq_file_fp):
             with open(seq_file_fp, 'w') as fh:
-                for aro_seqs in seq_dict.values():
-                    for seq in aro_seqs:
-                        fh.write("{}\n{}\n".format(seq[0], seq[1]))
+                for seq in seq_dict.values():
+                    fh.write("{}\n{}\n".format(seq[0], seq[1]))
 
     def write_proteins(self, seq_file_fp):
         self.write_seqs(self.proteins, seq_file_fp)
@@ -192,14 +207,116 @@ class CARD():
     def write_nucleoties(self, seq_file_fp):
         self.write_seqs(self.nucleotides, seq_file_fp)
 
+    def get_nucleotide_per_family(self):
+        """
+        Write nucleotides sequences to per family fasta files
+        """
+        if not os.path.exists('family_fasta'):
+            os.mkdir('family_fasta')
+
+        for key, card_item in self.card.items():
+            if card_item['model_type'] in self.supported_models:
+                aro = card_item['ARO_accession']
+                aro_name = card_item['ARO_name']
+                sequences = card_item['model_sequences']['sequence']
+                for seq_ix in sequences:
+                    for sequence_type in sequences[seq_ix]:
+                        if sequence_type == 'dna_sequence':
+                            sequence = sequences[seq_ix][sequence_type]
+                            with open(self.convert_amr_family_to_filename(self.aro_to_gene_family[aro]), 'a') as out_fh:
+                                acc = ">gb|{}|{}|{}|".format(sequence['accession'],
+                                                             aro,
+                                                             aro_name.replace(' ', '_'))
+                                seq = sequence['sequence']
+                                out_fh.write(acc + '\n' + seq + '\n')
+
+    def convert_amr_family_to_filename(self, family):
+        fp = os.path.join('family_fasta', family.replace(' ', '_').replace('/', '_'))
+        return fp
+
+    def add_prevalence_to_family(self, prevalence_folder):
+        for nt_fp in glob.glob(os.path.join(prevalence_folder, 'nucleotide_fasta_*')):
+            for record in SeqIO.parse(nt_fp, "fasta"):
+                try:
+                    aro = record.description.split('|')[2].replace('ARO:', '')
+                except:
+                    print(record)
+                    assert False
+                with open(self.convert_amr_family_to_filename(self.aro_to_gene_family[aro]), 'a') as out_fh:
+                    SeqIO.write(record, out_fh, "fasta")
+
+    def calculate_maximum_bitscores_per_aro(self):
+        """
+        Determine the maximum bitscore per ARO and add a dictionary
+        containing it to self
+        """
+        k_param = 0.711
+        lambda_param = 1.37
+        sub_matrix = blosum62
+
+        aro_bitscores = {}
+        for aro in self.proteins:
+            raw_score = 0
+
+            for aa in self.proteins[aro][1]:
+                raw_score += blosum62[(aa, aa)]
+            bitscore = (lambda_param * raw_score - math.log(k_param)) / math.log(2)
+
+            aro_bitscores.update({aro: bitscore})
+
+        self.max_aro_bitscores = aro_bitscores
+
+
+
+    def calculate_maximum_bitscores_per_family(self):
+        """
+        Determine the maximum bitscore per AMR family and add a dictionary
+        containing it to self
+        """
+        # k and lambda parameters are needed to normalise raw scores into
+        # bit-scores but I can't find the damn things on the BLAST website
+        k_param = 0.711
+        lambda_param = 1.37
+        sub_matrix = blosum62
+
+        family_bitscores = {}
+        for aro in self.proteins:
+            raw_score = 0
+
+            # to skip over the aro without proteins i.e. rRNA
+            if len(self.proteins[aro][1]) == 0:
+                continue
+
+            for aa in self.proteins[aro][1]:
+                raw_score += blosum62[(aa, aa)]
+            bitscore = (lambda_param * raw_score - math.log(k_param)) / math.log(2)
+
+            gene_family = self.aro_to_gene_family[aro]
+            if gene_family not in family_bitscores:
+                family_bitscores[gene_family] = [bitscore]
+            else:
+                family_bitscores[gene_family].append(bitscore)
+
+        max_family_bitscores = {}
+        for family, bitscores in family_bitscores.items():
+            max_family_bitscores.update({family: max(bitscores)})
+
+        self.max_family_bitscores = max_family_bitscores
+
 
 def prepare_labels(fp, card):
+    """
+    Parse label file and return list of ARO labels and their higher level
+    gene family level labels (using the CARD class lookup
+    """
+    families = []
     aros = []
     with open(fp) as fh:
         for line in fh:
             aro = line.split()[2]
             family = card.aro_to_gene_family[aro]
-            aros.append(family)
+            families.append(family)
+            aros.append(aro)
 
-    return aros
+    return families, aros
 
