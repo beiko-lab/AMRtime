@@ -1,0 +1,3 @@
+- Try propoagating the probabilities from the family level to the aro classifiers e.g. P(G1|F1) * P(F1)
+- Try just taking the max bitscore for each row as a dummy classifier
+- Create a hierarchial system based on shared 250mers and shared 100mers
