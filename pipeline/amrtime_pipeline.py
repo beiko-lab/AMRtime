@@ -27,8 +27,12 @@ def train(args):
 
     aro_classifiers.train()
     model.score(family_classifier.clf, aro_classifiers.family_level_classifiers,
-            data['train']['family']['X'], data['train']['family']['y'],
-            data['train']['aro']['X'], data['train']['aro']['y'])
+            data['test']['family']['X'], data['test']['family']['y'],
+            data['test']['aro']['X'], data['test']['aro']['y'])
+
+def classify(args):
+    card = parsers.CARD(args.card_fp)
+    trained_model = parsers.CARD(args.model)
 
 
 
@@ -47,6 +51,7 @@ if __name__ == '__main__':
         train(args)
 
     elif args.mode == 'classify':
+
         #if not os.path.exists(arg.model_dir):
         #    print('Must train first')
         pass
@@ -57,6 +62,3 @@ if __name__ == '__main__':
         # what is max(y_pred) for read
         # evaluate against that gene family level model in the trained model
         #   dictionary
-
-
-

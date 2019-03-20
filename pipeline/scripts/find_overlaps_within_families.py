@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 import glob
-import py_common_subseq
 import itertools
 import re
+from tqdm import tqdm
+import pickle
 
 def longest_common_substring(s1, s2):
    m = [[0] * (1 + len(s2)) for i in range(1 + len(s1))]
@@ -22,27 +23,26 @@ def longest_common_substring(s1, s2):
 
 if __name__ == '__main__':
 
-    for family in glob.glob('../family_fasta/*'):
-        family_seqs = []
-        with open(family) as fh:
-            ix = 1
-            for line in fh:
-                if ix % 2 == 1:
-                    acc = line.strip()
-                elif ix % 2 == 0:
-                    seq = line.strip()
-                    family_seqs.append((acc, seq))
-                ix+=1
+    lcs = {}
+    #for family in glob.glob('analyses/family_fasta/*'):
+    family = 'analyses/TEM_beta-lactamase_clean_unique.fna'
+    family_seqs = []
+    with open(family) as fh:
+        ix = 0
+        for line in fh:
+            if ix % 2 == 0:
+                acc = line.strip()
+                name = acc.split('|')[3]
+            elif ix % 2 == 1:
+                seq = line.strip()
+                family_seqs.append((acc, seq))
+            ix+=1
 
-        lcs_lens = []
-        for subset in itertools.combinations(family_seqs, 2):
-            lcs = longest_common_substring(subset[0][1], subset[1][1])
-            print(lcs)
-            assert False
-            lcs_lens.append(len(lcs))
-        print(lcs_lens)
+    lcs_lens = []
+    for subset in tqdm(itertools.combinations(family_seqs, 2)):
+        lcs = longest_common_substring(subset[0][1], subset[1][1])
+        lcs_lens.append((subset[0][0], subset[1][0], len(lcs)))
 
-
-
-
+    with open('tem_lens', 'wb') as fh:
+        pickle.dump(lcs_lens, fh)
 

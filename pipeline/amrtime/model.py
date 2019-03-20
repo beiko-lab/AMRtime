@@ -19,10 +19,14 @@ from amrtime import parsers
 from amrtime import utils
 
 class GeneFamilyLevelClassifier():
-    def __init__(self, X_family_train, y_family_train, card):
+    def __init__(self, X_family_train, y_family_train, card, name=None):
         self.card = card
         self.X = X_family_train
         self.y = y_family_train
+        if name is None:
+            self.name = "model"
+        else:
+            self.name = name
 
     def train(self):
         print("Training Family Classifier")
@@ -37,6 +41,9 @@ class GeneFamilyLevelClassifier():
             clf.fit(X_resampled, y_resampled)
             joblib.dump(clf, 'models/family.pkl')
             self.clf = clf
+
+    def test(self):
+        print("Evaluating
 
 
 class SubGeneFamilyModel(GeneFamilyLevelClassifier):
@@ -119,7 +126,6 @@ def generate_training_data(card):
     # generate training data
     if not os.path.exists('training_data/metagenome.fq'):
         subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i training_data/card_nucleotides.fna -f 10 -l 250 -rs 42 -o training_data/metagenome', shell=True)
-
     # build labels
     if not os.path.exists('training_data/metagenome_labels.tsv'):
         subprocess.check_call("grep '^@gb' training_data/metagenome.fq > training_data/read_names", shell=True)
