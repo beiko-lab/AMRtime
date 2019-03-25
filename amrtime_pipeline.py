@@ -3,6 +3,7 @@ import os
 
 from amrtime import utils
 from amrtime import parsers
+#from amrtime import database
 from amrtime import model
 
 # how do I make params that only evaluate once again?
@@ -11,7 +12,7 @@ RANDOM_STATE = 42
 def train(args):
     card = parsers.CARD(args.card_fp)
 
-    # generate training data
+    #generate training data
     dataset, labels = model.generate_training_data(card)
     data = model.prepare_data(dataset, labels, card)
 

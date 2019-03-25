@@ -2,12 +2,14 @@
 import json
 import math
 import itertools
+import subprocess
 import numpy as np
 import glob
 import re
 import os
 from Bio import SeqIO
 from Bio.SubsMat.MatrixInfo import blosum62
+
 
 class CARD():
     """
@@ -157,6 +159,9 @@ class CARD():
         return aro_to_gene_family
 
     def build_gene_family_to_aro(self):
+        """
+        Get reverse dictionary of gene family to aros
+        """
         gene_family_to_aro = {}
         for aro, gene_family in self.aro_to_gene_family.items():
             if gene_family not in gene_family_to_aro:
@@ -223,15 +228,20 @@ class CARD():
                     for sequence_type in sequences[seq_ix]:
                         if sequence_type == 'dna_sequence':
                             sequence = sequences[seq_ix][sequence_type]
-                            with open(self.convert_amr_family_to_filename(self.aro_to_gene_family[aro]), 'a') as out_fh:
+                            with open(self.convert_amr_family_to_filename(\
+                                    self.aro_to_gene_family[aro],
+                                    folder='family_fasta'), 'a') as out_fh:
                                 acc = ">gb|{}|{}|{}|".format(sequence['accession'],
                                                              aro,
                                                              aro_name.replace(' ', '_'))
                                 seq = sequence['sequence']
                                 out_fh.write(acc + '\n' + seq + '\n')
 
-    def convert_amr_family_to_filename(self, family):
-        fp = os.path.join('family_fasta', family.replace(' ', '_').replace('/', '_'))
+    def convert_amr_family_to_filename(self, family, folder=None):
+        if folder:
+            fp = os.path.join(folder, family.replace(' ', '_').replace('/', '_'))
+        else:
+            fp = family.replace(' ', '_').replace('/', '_')
         return fp
 
     def add_prevalence_to_family(self, prevalence_folder):
@@ -242,7 +252,8 @@ class CARD():
                 except:
                     print(record)
                     assert False
-                with open(self.convert_amr_family_to_filename(self.aro_to_gene_family[aro]), 'a') as out_fh:
+                with open(self.convert_amr_family_to_filename(\
+                        self.aro_to_gene_family[aro], 'family_fasta'), 'a') as out_fh:
                     SeqIO.write(record, out_fh, "fasta")
 
     def calculate_maximum_bitscores_per_aro(self):
@@ -265,7 +276,6 @@ class CARD():
             aro_bitscores.update({aro: bitscore})
 
         self.max_aro_bitscores = aro_bitscores
-
 
 
     def calculate_maximum_bitscores_per_family(self):
@@ -302,6 +312,57 @@ class CARD():
             max_family_bitscores.update({family: max(bitscores)})
 
         self.max_family_bitscores = max_family_bitscores
+
+
+    def generate_reads(self, aro, read_length, read_number, family=False):
+        """
+        Simulate reads using ART for the corresponding ARO,
+        Optionally from the whole family
+
+        Now how to handle balance when the diversity is variable
+        is a real problem
+
+        i.e. one classes covers more of sequence space than the other.
+        """
+        if not family:
+            seq = {aro: self.nucleotides[aro]}
+            tmp_fasta_file = f'training_data/{aro}.fasta'
+        if family:
+            family = self.aro_to_gene_family[aro]
+            family_aros = self.gene_family_to_aro[family]
+            seq = {aro: self.nucleotides[aro] for aro in family_aros}
+            fp = self.convert_amr_family_to_filename(family)
+            tmp_fasta_file = f'training_data/{fp}.fasta'
+
+        self.write_seqs(seq, 'training_data/tmp.fasta')
+
+        # -c is read count per sequence and -f is coverage
+        subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i \
+                    {tmp_fasta_file} -c {read_number} -l {read_length} \
+                    -rs 42 -o training_data/{aro}', shell=True)
+
+    #def find_family_overlaps(self, read_length):
+    #    """
+    #    Find perfect overlaps of length read_length between different
+    #    members of a AMR family
+
+    #    i.e. how many 250bp overlaps are there between all members of NDM
+    #    in protein space
+
+    #    Why use protein space? Because that's what we are querying and it
+    #    means shorter sequences to compare quickly
+    #    """
+
+    #    for family in
+    #    if not family:
+    #        seq = {aro: self.nucleotides[aro]}
+    #        tmp_fasta_file = f'training_data/{aro}.fasta'
+    #    if family:
+    #        family = self.aro_to_gene_family[aro]
+    #        family_aros = self.gene_family_to_aro[family]
+    #        seq = {aro: self.nucleotides[aro] for aro in family_aros}
+
+
 
 
 def prepare_labels(fp, card):

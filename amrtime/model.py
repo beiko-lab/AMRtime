@@ -31,22 +31,23 @@ class GeneFamilyLevelClassifier():
     def train(self):
         print("Training Family Classifier")
         print("Rebalancing Data")
-        if os.path.exists('models/family.pkl'):
-            self.clf = joblib.load('models/family.pkl')
+        if os.path.exists('{}/family.pkl'.format(self.name)):
+            self.clf = joblib.load('{}/family.pkl'.format(self.name))
         else:
             X_resampled, y_resampled = SMOTE(kind='borderline1').fit_sample(self.X,
                                                                             self.y)
             print("Training Model")
             clf = ensemble.RandomForestClassifier()
             clf.fit(X_resampled, y_resampled)
-            joblib.dump(clf, 'models/family.pkl')
+            joblib.dump(clf, '{}/family.pkl'.format(self.name))
             self.clf = clf
 
     def test(self):
-        print("Evaluating
+
+        print("Evaluating")
 
 
-class SubGeneFamilyModel(GeneFamilyLevelClassifier):
+class SubGeneFamilyModel(GeneFamilyLevelClassifier, name):
     """
     Classifier per gene family i.e. attempting to determine a function
     to map from an arbitrary AMR gene family to the specific set of
@@ -56,6 +57,11 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier):
         self.X = X_aro_train
         self.y = y_aro_train
         self.card = card
+        if name is None:
+            self.name = "model"
+        else:
+            self.name = name
+
 
     def train(self):
         """
@@ -83,17 +89,16 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier):
             # current family being trained
             X_train = X_train.iloc[label_indices]
 
-            if os.path.exists('models/{}.pkl'.format(family_name)):
-                family_clf = joblib.load('models/{}.pkl'.format(family_name))
+            if os.path.exists('{}/{}.pkl'.format(self.name, family_name)):
+                family_clf = joblib.load('{}/{}.pkl'.format(self.name, family_name))
                 family_level_classifiers.update({family: [family_clf, family_aros]})
-                continue
 
             # i.e. if family only has a single member
             if len(family_aros) == 1:
                 family_clf = dummy.DummyClassifier(strategy='constant', constant=family_aros[0])
                 family_clf.fit(X_train, y_train)
 
-                joblib.dump(family_clf, 'models/{}.pkl'.format(family_name))
+                joblib.dump(family_clf, '{}/{}.pkl'.format(self.name, family_name))
                 family_level_classifiers.update({family: [family_clf, family_aros]})
             else:
                 # rebalance using SMOTE
@@ -103,7 +108,7 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier):
 
                 family_clf.fit(X_resampled, y_resampled)
 
-                joblib.dump(family_clf, 'models/{}.pkl'.format(family_name))
+                joblib.dump(family_clf, '{}/{}.pkl'.format(self.name, family_name))
                 family_level_classifiers.update({family: [family_clf, family_aros]})
 
         self.family_level_classifiers = family_level_classifiers
@@ -238,21 +243,10 @@ def score(family_clf, family_classifiers, X_family, y_family, X_aro, y_aro):
 def prepare_data(dataset, labels, card):
     # run diamond filter to get homology encoding
     homology_encoding = encoding.Homology(dataset,
-            'training_data/card_proteins.faa', 'DIAMOND')
+                                        'training_data/card_proteins.faa',
+                                        'DIAMOND')
+
     X_family, X_aro = homology_encoding.encode(card, 'bitscore', norm=True)
-
-    #X_family_bitscore_norm = pd.read_pickle('family_bitscore.pkl')
-    #X_aro_bitscore_norm = pd.read_pickle('aro_bitscore.pkl')
-
-    #X_pident = homology_encoding.encode(card, 'pident')
-    #X_bitscore = homology_encoding.encode(card, 'bitscore')
-    #X_evalue = homology_encoding.encode(card, 'evalue')
-    #X_dissim = homology_encoding.encode(card, 'bitscore', dissimilarity=True)
-    #X_dissim_norm = homology_encoding.encode(card, 'bitscore', norm=True, dissimilarity=True)
-    #tnf = encoding.Kmer('training_data/metagenome.fq', 4)
-    #X_tnf = tnf.encode()
-    #k5mer = encoding.Kmer('training_data/metagenome.fq', 5)
-    #X_5mer = k5mer.encode()
 
     amr_family_labels, aro_labels = parsers.prepare_labels(labels, card)
 
