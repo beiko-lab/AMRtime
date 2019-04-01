@@ -171,7 +171,7 @@ def generate_training_data(card, redo=False):
     # cluster the seqs in each family at 99% identity
     print("Clustering sequences within families for family level classifier")
     family_clustered_folder = training_fasta_folder + "/clustered"
-    #utils.clean_and_remake_folder(family_clustered_folder)
+    utils.clean_and_remake_folder(family_clustered_folder)
     clustered_fasta_locs = {}
     for family_name, family_fp in amr_family_fasta_locs.items():
         clustered_fp = card.convert_amr_family_to_filename(family_name,
