@@ -133,11 +133,18 @@ def generate_training_data(card, redo=False):
 
     # check if training data has already been generated, if so return the
     # relevant paths unless the redo flag has been used
-    if os.path.exists('training_data/family_metagenome.fq') and \
-            os.path.exists('training_data/family_labels.tsv') and not redo:
+    if      os.path.exists('training_data/family_metagenome.fq') and \
+            os.path.exists('training_data/family_labels.tsv') and \
+            os.path.exists('training_data/subfamily_metagenome.fq') and \
+            os.path.exists('training_data/subfamily_labels.tsv') and \
+                and not redo:
         print("Training data already generated in training_data folder")
         print("Use --redo flag to rebuild")
-        return "training_data/metagenome.fq" "training_data/metagenome_labels.tsv"
+        return 'training_data/family_metagenome.fq', \
+               'training_data/family_labels.tsv', \
+               'training_data/subfamily_metagenome.fq', \
+               'training_data/subfamily_labels.tsv'
+
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
@@ -289,13 +296,27 @@ def generate_training_data(card, redo=False):
     subprocess.check_call(f"cat {paths} > {shlex.quote(family_fastq)}",
                           shell=True)
 
-    ## build labels
+    ## build labels for family dataset
     print("Building Family Labels")
     family_labels = "training_data/family_labels.tsv"
-    subprocess.check_call(f"grep '^@gb' {shlex.quote(family_fastq)} > training_data/read_names",
+    build_labels(family_fastq, family_labels)
+
+    print("Building Subfamily Labels")
+    paths = " ".join([shlex.quote(fp) for fp in subfamily_fastq_locs.values()])
+    subfamily_fastq = "training_data/subfamily_metagenome.fq"
+    subprocess.check_call(f"cat {paths} > {shlex.quote(subfamily_fastq)}",
+                          shell=True)
+    subfamily_labels = 'training_data/subfamily_labels.tsv'
+    build_labels(subfamily_fastq, subfamily_labels)
+
+    return family_fastq, family_labels, subfamily_fastq, subfamily_labels
+
+
+def build_labels(fastq, label_fp):
+    subprocess.check_call(f"grep '^@gb' {shlex.quote(fastq)} > training_data/read_names",
                          shell=True)
 
-    labels_fh = open(family_labels, 'w')
+    labels_fh = open(label_fp, 'w')
     with open('training_data/read_names') as fh:
         for line in fh:
             line = line.strip().replace('@', '')
@@ -309,53 +330,31 @@ def generate_training_data(card, redo=False):
             # and can't partially overlap
             amr_cutoff = 'Perfect'
             amr_overlap = '250'
-
             labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
                                        amr_cutoff, amr_overlap]) + '\n')
     labels_fh.close()
-
-    print("Building Subfamily Labels")
-    #todo
-
-    return family_fastq, family_labels
+    os.remove('training_data/read_names')
 
 
-def split_data(X_aro, aro_labels, aro_encoder,
-               X_family, amr_family_labels, family_encoder):
+def split_data(X, y, encoder):
     """
     Stratified split on AROs
     """
+    X_train, \
+    X_test, \
+    y_train, \
+    y_test = model_selection.train_test_split(X,
+                                              y,
+                                              stratify=y,
+                                              test_size=0.20,
+                                              random_state=42)
 
-    indices = np.arange(0, len(aro_labels))
+    data = {'train': {'X': X_train,
+                      'y': y_train},
+            'test':  {'X': X_test,
+                      'y': y_test},
+            'encoder' : encoder}
 
-    X_aro_train, \
-    X_aro_test, \
-    y_aro_train, \
-    y_aro_test, \
-    indices_train, \
-    indices_test = model_selection.train_test_split(X_aro,
-                                                    aro_labels,
-                                                    indices,
-                                                    stratify=aro_labels,
-                                                    test_size=0.20,
-                                                    random_state=42)
-
-    X_family_train = X_family.iloc[indices_train]
-    X_family_test = X_family.iloc[indices_test]
-    y_family_train = [amr_family_labels[x] for x in indices_train]
-    y_family_test = [amr_family_labels[x] for x in indices_test]
-
-
-    data = {'train': {'family': {'X': X_family_train,
-                                 'y': y_family_train},
-                      'aro': {'X': X_aro_train,
-                              'y': y_aro_train}},
-            'test': {'family': {'X': X_family_test,
-                                 'y': y_family_test},
-                      'aro': {'X': X_aro_test,
-                              'y': y_aro_test}},
-            'encoders' : {'family': family_encoder,
-                           'aro': aro_encoder}}
     return data
 
 
@@ -403,26 +402,30 @@ def score(family_clf, family_classifiers, X_family, y_family, X_aro, y_aro):
                                                                 y_aro_pred),
                                   "aro_test_report.tsv")
 
-def prepare_data(dataset, labels, card):
+def prepare_data(dataset, labels, data_type, card, pickle_fp):
     # run diamond filter to get homology encoding
     homology_encoding = encoding.Homology(dataset,
-                                        'training_data/card_proteins.faa',
-                                        'DIAMOND')
+                                          card,
+                                         'DIAMOND')
+
 
     X_family, X_aro = homology_encoding.encode(card, 'bitscore', norm=True)
 
     amr_family_labels, aro_labels = parsers.prepare_labels(labels, card)
 
-    le_family = preprocessing.LabelEncoder()
-    le_family.fit(amr_family_labels)
+    if data_type == 'family':
+        le_family = preprocessing.LabelEncoder()
+        le_family.fit(amr_family_labels)
+        data = split_date(X_family, amr_family_labels, le_family)
 
-    le_aro = preprocessing.LabelEncoder()
-    le_aro.fit(aro_labels)
+    elif data_type == 'aro':
+        le_aro = preprocessing.LabelEncoder()
+        le_aro.fit(aro_labels)
+        data = split_data(X_aro, aro_labels, le_aro)
+    else:
+        raise ValueError("data type must be 'family' or 'aro'")
 
-    data = split_data(X_aro, aro_labels, le_aro, X_family, amr_family_labels,
-                     le_family)
-
-    joblib.dump(data, 'training_data/data.pkl')
+    joblib.dump(data, pickle_fp)
 
     return data
 

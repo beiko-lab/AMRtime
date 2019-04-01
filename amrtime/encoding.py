@@ -12,10 +12,12 @@ class Homology():
     """
     Generate a read encoding
     """
-    def __init__(self, simulated_reads, reference_db, tool):
+    def __init__(self, simulated_reads, card, tool):
 
         self.reads = simulated_reads
-        self.db = reference_db
+
+        self.db = 'training_data/card_proteins.faa'
+        card.write_proteins(self.db)
 
         if tool == 'DIAMOND':
             if not os.path.exists('training_data/diamond.out6') :

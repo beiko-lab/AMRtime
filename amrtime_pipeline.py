@@ -12,24 +12,35 @@ RANDOM_STATE = 42
 def train(args):
     card = parsers.CARD(args.card_fp)
 
-    #generate training data
-    dataset, labels = model.generate_training_data(card, args.redo)
-    #data = model.prepare_data(dataset, labels, card)
+    #generate training data from card.json into labelled fastq
+    family_fastq, family_labels, aro_fastq, aro_labels = \
+            model.generate_training_data(card, args.redo)
 
-    #family_classifier = model.GeneFamilyLevelClassifier(data['train']['family']['X'],
-    #                                                          data['train']['family']['y'],
-    #                                                          card)
+    #encode this prepared data
+    #for the family-level model
+    family_data = model.prepare_data(family_fastq, family_labels, "family" ,
+                                     card, 'training_data/family_data.pkl')
 
-    #family_classifier.train()
+    #and for the aro/subfamily level models
+    aro_data = model.prepare_data(subfamily_fastq, subfamily_labels, "aro",
+                                 card, 'training_data/subfamily_data.pkl')
 
-    #aro_classifiers = model.SubGeneFamilyModel(data['train']['aro']['X'],
-    #                                           data['train']['aro']['y'],
-    #                                           card)
+    # train the family level classifier
+    family_classifier = model.GeneFamilyLevelClassifier(family_data['train']['X'],
+                                                        family_data['train']['y'],
+                                                              card)
+    family_classifier.train()
 
-    #aro_classifiers.train()
-    #model.score(family_classifier.clf, aro_classifiers.family_level_classifiers,
-    #        data['test']['family']['X'], data['test']['family']['y'],
-    #        data['test']['aro']['X'], data['test']['aro']['y'])
+    # and the aro level classifier
+    aro_classifiers = model.SubGeneFamilyModel(aro_data['train']['X'],
+                                               aro_data['train']['y'],
+                                               card)
+    aro_classifiers.train()
+
+    # then evaluate both models
+    model.score(family_classifier.clf, aro_classifiers.family_level_classifiers,
+            family_data['test']['X'], family_data['test']['y'],
+            aro_data['test']['X'], aro_data['test']['y'])
 
 def classify(args):
     card = parsers.CARD(args.card_fp)
