@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 import os
+import shlex
+import shutil
+import glob
 import subprocess
 import numpy as np
 from tqdm import tqdm
@@ -19,43 +22,47 @@ from amrtime import parsers
 from amrtime import utils
 
 class GeneFamilyLevelClassifier():
-    def __init__(self, X_family_train, y_family_train, card, name=None):
+    """
+    Class containing the classifier for reads into respective AMR families
+
+    - train
+    - test
+    """
+    def __init__(self, card, name=None):
         self.card = card
-        self.X = X_family_train
-        self.y = y_family_train
         if name is None:
             self.name = "model"
         else:
             self.name = name
 
-    def train(self):
+    def train(self, encoded_reads, family_labels):
         print("Training Family Classifier")
         print("Rebalancing Data")
-        if os.path.exists('{}/family.pkl'.format(self.name)):
-            self.clf = joblib.load('{}/family.pkl'.format(self.name))
+        if os.path.exists(f'{self.name}/family.pkl'):
+            self.clf = joblib.load(f'{self.name}/family.pkl')
         else:
             X_resampled, y_resampled = SMOTE(kind='borderline1').fit_sample(self.X,
                                                                             self.y)
             print("Training Model")
             clf = ensemble.RandomForestClassifier()
             clf.fit(X_resampled, y_resampled)
-            joblib.dump(clf, '{}/family.pkl'.format(self.name))
+            joblib.dump(clf, f'{name}/family.pkl')
             self.clf = clf
 
     def test(self):
-
         print("Evaluating")
 
 
-class SubGeneFamilyModel(GeneFamilyLevelClassifier, name):
+
+class SubGeneFamilyModel(GeneFamilyLevelClassifier):
     """
     Classifier per gene family i.e. attempting to determine a function
     to map from an arbitrary AMR gene family to the specific set of
     AROs within that gene family
     """
-    def __init__(self, X_aro_train, y_aro_train, card):
-        self.X = X_aro_train
-        self.y = y_aro_train
+    def __init__(self, card, name=None):
+        #self.X = X_aro_train
+        #self.y = y_aro_train
         self.card = card
         if name is None:
             self.name = "model"
@@ -108,53 +115,209 @@ class SubGeneFamilyModel(GeneFamilyLevelClassifier, name):
 
                 family_clf.fit(X_resampled, y_resampled)
 
-                joblib.dump(family_clf, '{}/{}.pkl'.format(self.name, family_name))
+                joblib.dump(family_clf, f'{self.name}/{family_name}.pkl')
                 family_level_classifiers.update({family: [family_clf, family_aros]})
 
         self.family_level_classifiers = family_level_classifiers
 
 
-def generate_training_data(card):
+def generate_training_data(card, redo=False):
     """
     Simulate training data from the card.json data
+
+    - sample reads from each family at equal coverage (5x?)
+    - read files and determine the number of reads in each family fastq
+    - generate additional reads proportional to the missing number
+    - resulting in each numbers of reads for each family
     """
+
+    # check if training data has already been generated, if so return the
+    # relevant paths unless the redo flag has been used
+    if os.path.exists('training_data/family_metagenome.fq') and \
+            os.path.exists('training_data/family_labels.tsv') and not redo:
+        print("Training data already generated in training_data folder")
+        print("Use --redo flag to rebuild")
+        return "training_data/metagenome.fq" "training_data/metagenome_labels.tsv"
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
 
-    if not os.path.exists('training_data/card_proteins.faa'):
-        card.write_proteins('training_data/card_proteins.faa')
 
-    if not os.path.exists('training_data/card_nucleotides.fna'):
-        card.write_nucleoties('training_data/card_nucleotides.fna')
+    training_fasta_folder = "training_data/family_seqs"
+    if not os.path.exists(training_fasta_folder):
+        os.mkdir(training_fasta_folder)
 
-    # generate training data
-    if not os.path.exists('training_data/metagenome.fq'):
-        subprocess.check_call('art_illumina -q -na -ef -sam -ss MSv3 -i training_data/card_nucleotides.fna -f 10 -l 250 -rs 42 -o training_data/metagenome', shell=True)
-    # build labels
-    if not os.path.exists('training_data/metagenome_labels.tsv'):
-        subprocess.check_call("grep '^@gb' training_data/metagenome.fq > training_data/read_names", shell=True)
+    amr_family_fasta_locs = card.write_nucleotide_families(training_fasta_folder)
 
-        labels_fh = open('training_data/metagenome_labels.tsv', 'w')
-        with open('training_data/read_names') as fh:
-            for line in fh:
-                line = line.strip().replace('@', '')
-                read_name = line
-                contig_name = '-'.join(line.split('-')[:-1])
+    # generate fastq files with even coverage over each family for training
+    # subgene level models
+    subfamily_fastq_folder = training_fasta_folder + "/subfamily_fq"
+    utils.clean_and_remake_folder(subfamily_fastq_folder)
 
-                split_line = line.split('|')
-                aro = split_line[2]
-                amr_name = '-'.join(split_line[3].split('-')[:-1])
-                # as they are all straight from the canonical sequence
-                # and can't partially overlap
-                amr_cutoff = 'Perfect'
-                amr_overlap = '250'
+    print("Generating balanced training data for subfamily classifiers")
+    subfamily_fastq_locs = {}
+    for family_name, family_fp in amr_family_fasta_locs.items():
 
-                labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
-                                           amr_cutoff, amr_overlap]) + '\n')
-        labels_fh.close()
+        fq_fp = card.convert_amr_family_to_filename(family_name,
+                          folder=subfamily_fastq_folder)
 
-    return 'training_data/metagenome.fq', 'training_data/metagenome_labels.tsv'
+        with open(os.devnull, 'w') as null_fh:
+            subprocess.check_call(f"art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
+                -f 10 -l 250 -rs 42 -o {shlex.quote(fq_fp)}", shell=True,
+                stderr=subprocess.STDOUT, stdout=null_fh)
+        subfamily_fastq_locs.update({family_name: fq_fp + ".fq"})
+
+
+    # cluster the seqs in each family at 99% identity
+    print("Clustering sequences within families for family level classifier")
+    family_clustered_folder = training_fasta_folder + "/clustered"
+    #utils.clean_and_remake_folder(family_clustered_folder)
+    clustered_fasta_locs = {}
+    for family_name, family_fp in amr_family_fasta_locs.items():
+        clustered_fp = card.convert_amr_family_to_filename(family_name,
+                          folder=family_clustered_folder)
+
+        with open(os.devnull, 'w') as null_fh:
+            subprocess.check_call(f"cd-hit -i {shlex.quote(family_fp)} -c 0.99 \
+                                    -o {shlex.quote(clustered_fp)}",
+                                  shell=True,
+                                  stderr=subprocess.STDOUT, stdout=null_fh)
+        clustered_fasta_locs.update({family_name: clustered_fp})
+
+        # add suffixes to the clustered sequence filenames so there isn't
+        # name collisions
+        with open(clustered_fp) as fh:
+            seqs = fh.readlines()
+        with open(clustered_fp, 'w') as fh:
+            for line in seqs:
+                if line.startswith(">"):
+                    line = line.strip() + "_clust" + '\n'
+                    fh.write(line)
+                else:
+                    fh.write(line)
+
+    # for each of these generate a set of reads at even coverage
+    print("Generating training data for family level classifier")
+    family_fastq_folder = family_clustered_folder + "/fq"
+    utils.clean_and_remake_folder(family_fastq_folder)
+    family_read_counts = {}
+    family_fastq_locs = {}
+    for family_name, clustered_fp in clustered_fasta_locs.items():
+        clustered_fq_fp = card.convert_amr_family_to_filename(family_name,
+                                            folder=family_fastq_folder)
+        with open(os.devnull, 'w') as null_fh:
+            subprocess.check_call(f"art_illumina -q -na -ss MSv3 -i {shlex.quote(clustered_fp)} \
+                    -f 10 -l 250 -rs 42 -o {shlex.quote(clustered_fq_fp)}", shell=True,
+                    stderr=subprocess.STDOUT, stdout=null_fh)
+
+        family_fastq_locs.update({family_name: clustered_fq_fp + ".fq"})
+        family_read_counts.update({family_name: utils.count_reads_per_file(\
+                    shlex.quote(clustered_fq_fp + ".fq"))})
+
+    # now we find the largest read count
+    biggest_count = max([count for count in family_read_counts.values()])
+
+    # for each family generate a new file with the number of reads needed
+    # this is currently being done for the unclustered family seqs
+    print("Balancing training data for family level classifier")
+    family_fastq_topup_locs = {}
+
+    for family_name, family_fp in amr_family_fasta_locs.items():
+        top_up_fq_fp = card.convert_amr_family_to_filename(family_name, folder=family_fastq_folder) + "_topup"
+
+        diff_count = biggest_count - family_read_counts[family_name]
+
+        # difference needed per read to get that count as -c generates
+        # reads per sequence in fasta
+        family_size = len(card.gene_family_to_aro[family_name])
+        diff_reads = round(diff_count / family_size)
+
+        if diff_reads > 0:
+            with open(os.devnull, 'w') as null_fh:
+                try:
+                    subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
+                    -c {diff_reads} -l 250 -rs 42 -o {shlex.quote(top_up_fq_fp)}', shell=True,
+                        stderr=subprocess.STDOUT, stdout=null_fh)
+                # some sequences e.g. dfr have representatives <250 bp long
+                # this apparently isn't a problem with fold coverage for unclear
+                # reasons buet causes an exception for option of reads per sequence
+                # work-around retry with 225 length reads.
+                except:
+                    try:
+                        subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
+                            -c {diff_reads} -l 225 -rs 42 -o {shlex.quote(top_up_fq_fp)}', shell=True,
+                            stderr=subprocess.STDOUT, stdout=null_fh)
+                    except:
+                        subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
+                            -c {diff_reads} -l 190 -rs 42 -o {shlex.quote(top_up_fq_fp)}', shell=True,
+                            stderr=subprocess.STDOUT, stdout=null_fh)
+
+
+            family_fastq_topup_locs.update({family_name: top_up_fq_fp + ".fq"})
+
+    print("Collating training data for family level classifier")
+    comb_family_fastq_folder = training_fasta_folder + "/family_fq"
+    utils.clean_and_remake_folder(comb_family_fastq_folder)
+
+    family_combined_fastq_locs = {}
+    for family_name, family_fastq_fp in family_fastq_locs.items():
+        # biggest family shouldn't have a top up file as its already at the
+        # maximum size
+        if family_name not in family_fastq_topup_locs:
+            if family_read_counts[family_name] == biggest_count:
+                top_up_fastq_fp = ""
+            else:
+                print("Bug with read counts for ", family_name)
+        else:
+            top_up_fastq_fp = family_fastq_topup_locs[family_name]
+
+        combined_fp = card.convert_amr_family_to_filename(family_name,
+                                                          folder=comb_family_fastq_folder)
+
+        if len(top_up_fastq_fp) > 0:
+            subprocess.check_call(f"cat {shlex.quote(family_fastq_fp)} {shlex.quote(top_up_fastq_fp)} > {shlex.quote(combined_fp)}",
+                                  shell=True)
+        else:
+            subprocess.check_call(f"cat {shlex.quote(family_fastq_fp)} > {shlex.quote(combined_fp)}",
+                                  shell=True)
+
+        family_combined_fastq_locs.update({family_name: combined_fp})
+
+    ## combine all family fq into one big file
+    paths = " ".join([shlex.quote(fp) for fp in family_combined_fastq_locs.values()])
+    family_fastq = "training_data/family_metagenome.fq"
+    subprocess.check_call(f"cat {paths} > {shlex.quote(family_fastq)}",
+                          shell=True)
+
+    ## build labels
+    print("Building Family Labels")
+    family_labels = "training_data/family_labels.tsv"
+    subprocess.check_call(f"grep '^@gb' {shlex.quote(family_fastq)} > training_data/read_names",
+                         shell=True)
+
+    labels_fh = open(family_labels, 'w')
+    with open('training_data/read_names') as fh:
+        for line in fh:
+            line = line.strip().replace('@', '')
+            read_name = line
+            contig_name = '-'.join(line.split('-')[:-1])
+
+            split_line = line.split('|')
+            aro = split_line[2]
+            amr_name = '-'.join(split_line[3].split('-')[:-1])
+            # as they are all straight from the canonical sequence
+            # and can't partially overlap
+            amr_cutoff = 'Perfect'
+            amr_overlap = '250'
+
+            labels_fh.write('\t'.join([read_name, contig_name, aro, amr_name,
+                                       amr_cutoff, amr_overlap]) + '\n')
+    labels_fh.close()
+
+    print("Building Subfamily Labels")
+    #todo
+
+    return family_fastq, family_labels
 
 
 def split_data(X_aro, aro_labels, aro_encoder,

@@ -212,13 +212,11 @@ class CARD():
     def write_nucleoties(self, seq_file_fp):
         self.write_seqs(self.nucleotides, seq_file_fp)
 
-    def get_nucleotide_per_family(self):
+    def write_nucleotide_families(self, family_fasta_folder):
         """
         Write nucleotides sequences to per family fasta files
         """
-        if not os.path.exists('family_fasta'):
-            os.mkdir('family_fasta')
-
+        file_locations = {}
         for key, card_item in self.card.items():
             if card_item['model_type'] in self.supported_models:
                 aro = card_item['ARO_accession']
@@ -227,22 +225,31 @@ class CARD():
                 for seq_ix in sequences:
                     for sequence_type in sequences[seq_ix]:
                         if sequence_type == 'dna_sequence':
+                            family = self.aro_to_gene_family[aro]
                             sequence = sequences[seq_ix][sequence_type]
-                            with open(self.convert_amr_family_to_filename(\
-                                    self.aro_to_gene_family[aro],
-                                    folder='family_fasta'), 'a') as out_fh:
+                            fp = self.convert_amr_family_to_filename(family + '.fn',
+                                    folder=family_fasta_folder)
+                            with open(fp, 'a') as out_fh:
                                 acc = ">gb|{}|{}|{}|".format(sequence['accession'],
                                                              aro,
                                                              aro_name.replace(' ', '_'))
                                 seq = sequence['sequence']
                                 out_fh.write(acc + '\n' + seq + '\n')
+                            if family not in file_locations:
+                                file_locations.update({family: fp})
+        return file_locations
 
     def convert_amr_family_to_filename(self, family, folder=None):
+        family = family.replace(' ', '_').replace('/', '@').replace("'", "^").replace('"', "+")
         if folder:
-            fp = os.path.join(folder, family.replace(' ', '_').replace('/', '_'))
+            fp = os.path.join(folder, family)
         else:
-            fp = family.replace(' ', '_').replace('/', '_')
+            fp = family
         return fp
+
+    def convert_amr_family_filename_to_family(self, family):
+        family = family.replace('_', ' ').replace('@', '/').replace("^", "'").replace("+", '"')
+        return family
 
     def add_prevalence_to_family(self, prevalence_folder):
         for nt_fp in glob.glob(os.path.join(prevalence_folder, 'nucleotide_fasta_*')):
@@ -340,6 +347,7 @@ class CARD():
         subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i \
                     {tmp_fasta_file} -c {read_number} -l {read_length} \
                     -rs 42 -o training_data/{aro}', shell=True)
+
 
     #def find_family_overlaps(self, read_length):
     #    """
