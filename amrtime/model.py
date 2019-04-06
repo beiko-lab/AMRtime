@@ -137,7 +137,7 @@ def generate_training_data(card, redo=False):
             os.path.exists('training_data/family_labels.tsv') and \
             os.path.exists('training_data/subfamily_metagenome.fq') and \
             os.path.exists('training_data/subfamily_labels.tsv') and \
-                and not redo:
+                not redo:
         print("Training data already generated in training_data folder")
         print("Use --redo flag to rebuild")
         return 'training_data/family_metagenome.fq', \
@@ -170,7 +170,7 @@ def generate_training_data(card, redo=False):
 
         with open(os.devnull, 'w') as null_fh:
             subprocess.check_call(f"art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
-                -f 10 -l 250 -rs 42 -o {shlex.quote(fq_fp)}", shell=True,
+                -f 1 -l 250 -rs 42 -o {shlex.quote(fq_fp)}", shell=True,
                 stderr=subprocess.STDOUT, stdout=null_fh)
         subfamily_fastq_locs.update({family_name: fq_fp + ".fq"})
 
@@ -405,14 +405,17 @@ def score(family_clf, family_classifiers, X_family, y_family, X_aro, y_aro):
 def prepare_data(dataset, labels, data_type, card, pickle_fp):
     # run diamond filter to get homology encoding
     homology_encoding = encoding.Homology(dataset,
+                                         data_type,
                                           card,
                                          'DIAMOND')
 
-
+    print(f"Encoding: {data_type}")
     X_family, X_aro = homology_encoding.encode(card, 'bitscore', norm=True)
 
+    print(f"Preparing labels: {data_type}")
     amr_family_labels, aro_labels = parsers.prepare_labels(labels, card)
 
+    print(f"Separating test data: {data_type}")
     if data_type == 'family':
         le_family = preprocessing.LabelEncoder()
         le_family.fit(amr_family_labels)
