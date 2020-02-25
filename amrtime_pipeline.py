@@ -46,9 +46,6 @@ def classify(args):
     card = parsers.CARD(args.card_fp)
     trained_model = parsers.CARD(args.model)
 
-
-
-
 if __name__ == '__main__':
 
     parser = utils.get_parser()

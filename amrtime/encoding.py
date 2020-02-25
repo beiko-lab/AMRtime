@@ -1,4 +1,5 @@
 import os
+from tqdm import tqdm
 import sys
 import subprocess
 import pandas as pd
@@ -7,6 +8,8 @@ from amrtime import parsers
 import math
 import itertools
 import re
+
+from sklearn.preprocessing import normalize
 
 class Homology():
     """
@@ -57,12 +60,12 @@ class Homology():
         # build reference to get the correct row for each AMR family
         if self.data_type == 'family':
             label_to_field = {family: ix for ix, family in enumerate(set(card.aro_to_gene_family.values()))}
-            field_to_label = {v: k for k, v in family_to_field.items()}
+            field_to_label = {v: k for k, v in label_to_field.items()}
 
         # build the same for the aros
         elif self.data_type == 'aro':
             label_to_field = {aro: ix for ix, aro in enumerate(set(card.aro_to_gene_family.keys()))}
-            field_to_label= {v: k for k, v in aro_to_field.items()}
+            field_to_label = {v: k for k, v in field_to_label.items()}
 
         # read input fastq and initialise an empty vectors for each read
         # and store in a dictionary of read_acc: vector
@@ -74,7 +77,7 @@ class Homology():
         #        # initalise the gene family and aro similarity vectors
         #        # i.e. x_j for j is the similarity to the gene family
         #        # or aro of interest
-        #        family_sim_vector = np.zeros(len(family_to_field))
+        #        family_sim_vector = np.zeros(len(label_to_field))
         #        aro_sim_vector = np.zeros(len(aro_to_field))
 
         #        gene_family_encoding.update({read_acc : family_sim_vector})
@@ -89,80 +92,76 @@ class Homology():
             out_field = 10
         elif metric == 'pident':
             out_field = 2
+        else:
+            raise ValueError('metric must be: {bitscore,evalue,pident}')
 
         scores = {}
         # without this we don't have encodings for anything with no DIAMOND
         # hits i.e. all 0 vectors.
-        #seen = set()
+        if self.data_type == 'aro':
+            folder = 'training_data/subfamily_training_data'
+        elif self.data_type == 'family':
+            folder = 'training_data/family_training_data'
 
-        encoding_fh = open(f'training_data/{self.data_type}_X.txt', 'w')
-        read_names_fh = open(f'training_data/{self.data_type}_read_names.txt', 'w')
-        for alignment in alignment_fh:
-            alignment = alignment.strip().split('\t')
-            query_acc = alignment[0]
-            alignment_aro = alignment[1].split('|')[2]
-            score = float(alignment[out_field])
+        encoding_fp = f'{folder}/{self.data_type}_X.txt'
+        read_names_fp = f'{folder}/{self.data_type}_read_names.txt'
 
-            if self.data_type == 'family':
-                label = card.aro_to_gene_family[alignment_aro]
-            else:
-                label = alignment_aro
-
-            field = label_to_field[label]
-
-            # all from same query are back to back in diamond output
-            if current_acc is None:
-                # for the first sequence
-                current_acc = query_acc
-                vector = np.zeroes(len(label_to_field))
-
-            # dump previous and move onto next vector
-            if query_acc != current_acc:
-                ## to fix
-                encoding_fh.write("\t".join([str(x) for x in vector] + '\n')
-                read_names_fh.write(current_acc + "\n")
-
-                current_acc = query_acc
-                vector = np.zeroes(len(label_to_field))
-
-            #seen.update(query_acc)
-
-            if metric == 'evalue':
-                score = math.log(score)
-
-            # if this bitscore is greater than the already highest for that
-            # read and family
-            if metric == 'evalue':
-                if score < vector[field]:
-                    vector[field] = score
-            else:
-                if score > vector[field]:
-                    vector[field] = score
-
-        encoding_fh.close()
-        read_names_fh.close()
-        alignment_fh.close()
-
-        x_encoding = np.loadtxt(f'training_data/{self.data_type}_X.txt', delimiter='\t')
-
-        ## create family encoding
-        #family_df = pd.DataFrame(gene_family_encoding)
-        #family_df = family_df.transpose()
-        ## rename the columns with the gene families
-        #family_index = [field_to_family[x] for x in range(len(field_to_family))]
-        #family_df.columns = family_index
-        ## to reorder the encoding correctly
-        #family_df = family_df.loc[read_ixs]
+        if os.path.exists(encoding_fp) and os.path.exists(read_names_fp):
+            print(f'Encoded {self.data_type} already exists so re-using'
+                    ', use --redo to rebuild')
+            alignment_fh.close()
+            reads_fh.close()
+        else:
+            encoding_fh = open(encoding_fp, 'w')
+            read_names_fh = open(read_names_fp, 'w')
 
 
-        ## create aro encoding
-        #aro_df = pd.DataFrame(aro_encoding)
-        #aro_df = aro_df.transpose()
-        ## rename the columns with the correct ARO
-        #aro_index = [field_to_aro[x] for x in range(len(field_to_aro))]
-        #aro_df.columns = aro_index
-        ## to reorder the encoding correctly
-        #aro_df = aro_df.loc[read_ixs]
+            align_iter = itertools.groupby(alignment_fh,
+                                         lambda x: x.split('\t')[0])
+
+
+            for query_acc, query_hits in align_iter:
+                # make new vector and assign new read to current
+                vector = np.zeros(len(label_to_field))
+
+                for hit in query_hits:
+                    alignment = hit.strip().split('\t')
+                    alignment_aro = alignment[1].split('|')[2]
+                    score = float(alignment[out_field])
+
+                    if self.data_type == 'family':
+                        label = card.aro_to_gene_family[alignment_aro]
+                    elif self.data_type == 'aro':
+                        label = alignment_aro
+                    else:
+                        raise ValueError("data_type must be {family,aro}")
+
+                    field = label_to_field[label]
+
+                    # if this bitscore is greater than the already highest for that
+                    # read and family
+                    if metric == 'evalue':
+                        score = math.log(score)
+                        if score < vector[field]:
+                            vector[field] = score
+                    else:
+                        if score > vector[field]:
+                            vector[field] = score
+
+
+                # moved onto the next read so we can dump the vector and move on
+                encoded_vector = "\t".join([str(x) for x in np.nditer(vector)])
+                encoding_fh.write(encoded_vector + "\n")
+                read_names_fh.write(query_acc+ "\n")
+
+
+            encoding_fh.close()
+            read_names_fh.close()
+            alignment_fh.close()
+
+        x_encoding = np.loadtxt(encoding_fp, delimiter='\t')
+
+        print(x_encoding.shape)
 
         # normalise bitscores
         if self.data_type == 'family':
@@ -174,29 +173,31 @@ class Homology():
 
         if norm and metric == 'bitscore':
             print("Normalising encoding")
+            x_encoding = normalize(x_encoding, axis=1, norm='l1')
             # numpy divide column by max per column
-            normalising = np.zeros(len(label_to_field))
-            for field, label in label_to_field.items():
-                normalising[field] = max_family_bitscores[label]
-                x_encoding = x_encoding / normalising
+            #normalising = np.zeros(len(label_to_field))
+            #for label, field in label_to_field.items():
+            #    normalising[field] = card.max_family_bitscores[label]
+            #    x_encoding = x_encoding / normalising
+
 
         elif norm and metric != 'bitscore':
             print("Can't normalise non bitscore metrics currently, must set metric to bitscore")
             sys.exit(1)
 
         # normalise and calculate dissimilarity matrices
-        if dissimilarity and norm:
-            print("Calculating Dissimilarity")
-            # convert this to new matrix
-            family_df = family_df.applymap(lambda x: 1-x)
-            family_df = family_df.fillna(0)
-            aro_df = aro_df.applymap(lambda x: 1-x)
-            aro_df = aro_df.fillna(0)
-        elif dissimilarity and not norm:
-            print("Can't create dissimilarity matrix for non-normalised bitscores, must set dissimilarity and norm to True")
-            sys.exit(1)
+        #if dissimilarity and norm:
+        #    print("Calculating Dissimilarity")
+        #    # convert this to new matrix
+        #    family_df = family_df.applymap(lambda x: 1-x)
+        #    family_df = family_df.fillna(0)
+        #    aro_df = aro_df.applymap(lambda x: 1-x)
+        #    aro_df = aro_df.fillna(0)
+        #elif dissimilarity and not norm:
+        #    print("Can't create dissimilarity matrix for non-normalised bitscores, must set dissimilarity and norm to True")
+        #    sys.exit(1)
 
-        return family_df, aro_df
+        return x_encoding
 
 
 class Kmer():

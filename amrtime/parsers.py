@@ -372,7 +372,6 @@ class CARD():
 
 
 
-
 def prepare_labels(fp, card):
     """
     Parse label file and return list of ARO labels and their higher level
@@ -388,4 +387,3 @@ def prepare_labels(fp, card):
             aros.append(aro)
 
     return families, aros
-

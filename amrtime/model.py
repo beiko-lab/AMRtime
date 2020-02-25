@@ -8,7 +8,6 @@ import subprocess
 import numpy as np
 from tqdm import tqdm
 
-from imblearn.over_sampling import SMOTE
 from sklearn import model_selection
 from sklearn import ensemble
 from sklearn import preprocessing
@@ -133,24 +132,24 @@ def generate_training_data(card, redo=False):
 
     # check if training data has already been generated, if so return the
     # relevant paths unless the redo flag has been used
-    if      os.path.exists('training_data/family_metagenome.fq') and \
-            os.path.exists('training_data/family_labels.tsv') and \
-            os.path.exists('training_data/subfamily_metagenome.fq') and \
-            os.path.exists('training_data/subfamily_labels.tsv') and \
+    if      os.path.exists('training_data/family_training_data/family_metagenome.fq') and \
+            os.path.exists('training_data/family_training_data/family_labels.tsv') and \
+            os.path.exists('training_data/subfamily_training_data/subfamily_metagenome.fq') and \
+            os.path.exists('training_data/subfamily_training_data/subfamily_labels.tsv') and \
                 not redo:
         print("Training data already generated in training_data folder")
         print("Use --redo flag to rebuild")
-        return 'training_data/family_metagenome.fq', \
-               'training_data/family_labels.tsv', \
-               'training_data/subfamily_metagenome.fq', \
-               'training_data/subfamily_labels.tsv'
+        return 'training_data/family_training_data/family_metagenome.fq', \
+               'training_data/family_training_data/family_labels.tsv', \
+               'training_data/subfamily_training_data/subfamily_metagenome.fq', \
+               'training_data/subfamily_training_data/subfamily_labels.tsv'
 
 
     if not os.path.exists('training_data'):
         os.mkdir('training_data')
 
 
-    training_fasta_folder = "training_data/family_seqs"
+    training_fasta_folder = "training_data/database_seqs"
     if not os.path.exists(training_fasta_folder):
         os.mkdir(training_fasta_folder)
 
@@ -158,8 +157,12 @@ def generate_training_data(card, redo=False):
 
     # generate fastq files with even coverage over each family for training
     # subgene level models
-    subfamily_fastq_folder = training_fasta_folder + "/subfamily_fq"
+    subfamily_training_folder = "training_data/subfamily_training_data"
+    utils.clean_and_remake_folder(subfamily_training_folder)
+
+    subfamily_fastq_folder = subfamily_training_folder + "/fq"
     utils.clean_and_remake_folder(subfamily_fastq_folder)
+
 
     print("Generating balanced training data for subfamily classifiers")
     subfamily_fastq_locs = {}
@@ -177,7 +180,10 @@ def generate_training_data(card, redo=False):
 
     # cluster the seqs in each family at 99% identity
     print("Clustering sequences within families for family level classifier")
-    family_clustered_folder = training_fasta_folder + "/clustered"
+    family_training_data = "training_data/family_training_data"
+    utils.clean_and_remake_folder(family_training_data)
+
+    family_clustered_folder = family_training_data + "/clustered"
     utils.clean_and_remake_folder(family_clustered_folder)
     clustered_fasta_locs = {}
     for family_name, family_fp in amr_family_fasta_locs.items():
@@ -205,7 +211,7 @@ def generate_training_data(card, redo=False):
 
     # for each of these generate a set of reads at even coverage
     print("Generating training data for family level classifier")
-    family_fastq_folder = family_clustered_folder + "/fq"
+    family_fastq_folder = family_training_data + "/fq"
     utils.clean_and_remake_folder(family_fastq_folder)
     family_read_counts = {}
     family_fastq_locs = {}
@@ -214,7 +220,7 @@ def generate_training_data(card, redo=False):
                                             folder=family_fastq_folder)
         with open(os.devnull, 'w') as null_fh:
             subprocess.check_call(f"art_illumina -q -na -ss MSv3 -i {shlex.quote(clustered_fp)} \
-                    -f 10 -l 250 -rs 42 -o {shlex.quote(clustered_fq_fp)}", shell=True,
+                    -f 1 -l 250 -rs 42 -o {shlex.quote(clustered_fq_fp)}", shell=True,
                     stderr=subprocess.STDOUT, stdout=null_fh)
 
         family_fastq_locs.update({family_name: clustered_fq_fp + ".fq"})
@@ -263,7 +269,7 @@ def generate_training_data(card, redo=False):
             family_fastq_topup_locs.update({family_name: top_up_fq_fp + ".fq"})
 
     print("Collating training data for family level classifier")
-    comb_family_fastq_folder = training_fasta_folder + "/family_fq"
+    comb_family_fastq_folder = family_training_data + "/balanced_fastq"
     utils.clean_and_remake_folder(comb_family_fastq_folder)
 
     family_combined_fastq_locs = {}
@@ -292,21 +298,21 @@ def generate_training_data(card, redo=False):
 
     ## combine all family fq into one big file
     paths = " ".join([shlex.quote(fp) for fp in family_combined_fastq_locs.values()])
-    family_fastq = "training_data/family_metagenome.fq"
+    family_fastq = "training_data/family_training_data/family_metagenome.fq"
     subprocess.check_call(f"cat {paths} > {shlex.quote(family_fastq)}",
                           shell=True)
 
     ## build labels for family dataset
     print("Building Family Labels")
-    family_labels = "training_data/family_labels.tsv"
+    family_labels = "training_data/family_training_data/family_labels.tsv"
     build_labels(family_fastq, family_labels)
 
     print("Building Subfamily Labels")
     paths = " ".join([shlex.quote(fp) for fp in subfamily_fastq_locs.values()])
-    subfamily_fastq = "training_data/subfamily_metagenome.fq"
+    subfamily_fastq = "training_data/subfamily_training_data/subfamily_metagenome.fq"
     subprocess.check_call(f"cat {paths} > {shlex.quote(subfamily_fastq)}",
                           shell=True)
-    subfamily_labels = 'training_data/subfamily_labels.tsv'
+    subfamily_labels = 'training_data/subfamily_training_data/subfamily_labels.tsv'
     build_labels(subfamily_fastq, subfamily_labels)
 
     return family_fastq, family_labels, subfamily_fastq, subfamily_labels
@@ -410,7 +416,7 @@ def prepare_data(dataset, labels, data_type, card, pickle_fp):
                                          'DIAMOND')
 
     print(f"Encoding: {data_type}")
-    X_family, X_aro = homology_encoding.encode(card, 'bitscore', norm=True)
+    x_encoded = homology_encoding.encode(card, 'bitscore', norm=True)
 
     print(f"Preparing labels: {data_type}")
     amr_family_labels, aro_labels = parsers.prepare_labels(labels, card)
@@ -419,12 +425,12 @@ def prepare_data(dataset, labels, data_type, card, pickle_fp):
     if data_type == 'family':
         le_family = preprocessing.LabelEncoder()
         le_family.fit(amr_family_labels)
-        data = split_date(X_family, amr_family_labels, le_family)
+        data = split_data(x_encoded, amr_family_labels, le_family)
 
     elif data_type == 'aro':
         le_aro = preprocessing.LabelEncoder()
         le_aro.fit(aro_labels)
-        data = split_data(X_aro, aro_labels, le_aro)
+        data = split_data(x_encoded, aro_labels, le_aro)
     else:
         raise ValueError("data type must be 'family' or 'aro'")
 
