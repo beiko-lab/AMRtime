@@ -409,9 +409,13 @@ def score(family_clf, family_classifiers, X_family, y_family, X_aro, y_aro):
                                   "aro_test_report.tsv")
 
 def prepare_data(dataset, labels, data_type, card, pickle_fp):
+
+    if data_type not in ['family', 'cluster', 'gene']:
+        raise ValueError
+
     # run diamond filter to get homology encoding
     homology_encoding = encoding.Homology(dataset,
-                                         data_type,
+                                          data_type,
                                           card,
                                          'DIAMOND')
 

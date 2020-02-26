@@ -1,5 +1,12 @@
 #!/usr/bin/env python
-import os
+# -*- coding: utf-8 -*-
+
+__version__ = "0.1.0"
+
+import time
+import logging
+
+
 
 from amrtime import utils
 from amrtime import parsers
@@ -9,7 +16,63 @@ from amrtime import model
 # how do I make params that only evaluate once again?
 RANDOM_STATE = 42
 
+
+def check_dependencies():
+    """
+    Check all dependencies exist and work
+    """
+
+    missing=False
+    for program in ["diamond version", "vsearch -v"]:
+        try:
+            output = subprocess.run(program, shell=True, check=True,
+                                    stdout=subprocess.PIPE, encoding='utf-8')
+            version = output.stdout.split('\n')[0]
+            logging.debug(f"Tool {program.split()[0]} is installed {version}")
+        except:
+            logging.error(f"Tool {program.split()[0]} is not installed")
+            missing=True
+    if missing:
+        logging.error("One or more dependencies are missing please install")
+        sys.exit(1)
+    else:
+        logging.debug("All dependencies found")
+
+
+def run(args):
+    """
+    Main runner function for AMRtime
+
+    Parameters:
+        args: arguments parsed from argparse
+    """
+    if args.run-mode == 'train':
+        run_name = 'Train'
+    elif args.run-mode == 'predict':
+        run_name = 'Predict'
+
+    if args.verbose:
+        logging.basicConfig(format="%(levelname)s:%(message)s",
+                            level=logging.DEBUG,
+                            handlers=[logging.FileHandler(f"{run_name}.log"),
+                                logging.StreamHandler()])
+
+    else:
+        logging.basicConfig(format="%(levelname)s:%(message)s",
+                            level=logging.INFO,
+                            handlers=[logging.FileHandler(f"{run_name}.log"),
+                                logging.StreamHandler()])
+
+    #logging.info(f"Started AMRtime
+    check_dependencies()
+
+
 def train(args):
+    """
+    Train the amrtime models from a supplied CARD released using the
+    card.json file
+    """
+
     card = parsers.CARD(args.card_fp)
 
     #generate training data from card.json into labelled fastq

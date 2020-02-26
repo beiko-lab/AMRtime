@@ -63,7 +63,7 @@ class Homology():
             field_to_label = {v: k for k, v in label_to_field.items()}
 
         # build the same for the aros
-        elif self.data_type == 'aro':
+        elif self.data_type == 'gene':
             label_to_field = {aro: ix for ix, aro in enumerate(set(card.aro_to_gene_family.keys()))}
             field_to_label = {v: k for k, v in field_to_label.items()}
 
