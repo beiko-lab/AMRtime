@@ -5,8 +5,9 @@ __version__ = "0.1.0"
 
 import time
 import logging
-
-
+import sys
+import subprocess
+import os
 
 from amrtime import utils
 from amrtime import parsers
@@ -17,54 +18,54 @@ from amrtime import model
 RANDOM_STATE = 42
 
 
-def check_dependencies():
-    """
-    Check all dependencies exist and work
-    """
-
-    missing=False
-    for program in ["diamond version", "vsearch -v"]:
-        try:
-            output = subprocess.run(program, shell=True, check=True,
-                                    stdout=subprocess.PIPE, encoding='utf-8')
-            version = output.stdout.split('\n')[0]
-            logging.debug(f"Tool {program.split()[0]} is installed {version}")
-        except:
-            logging.error(f"Tool {program.split()[0]} is not installed")
-            missing=True
-    if missing:
-        logging.error("One or more dependencies are missing please install")
-        sys.exit(1)
-    else:
-        logging.debug("All dependencies found")
-
-
 def run(args):
     """
     Main runner function for AMRtime
+    Sets up logging checks dependencies then calls the appropriate
+    training or prediction function
 
     Parameters:
         args: arguments parsed from argparse
     """
-    if args.run-mode == 'train':
-        run_name = 'Train'
-    elif args.run-mode == 'predict':
-        run_name = 'Predict'
+    # generating a run name for logging purposes and output purposes
+    if args.output_folder:
+        run_name = args.mode + " " + os.path.basename(args.output_folder)
+    else:
+        run_name = args.mode + " " + str(int(time.time()))
+        args.output_folder = run_name.replace(' ', '_')
+
+
+    # check output folder specified
+    if os.path.exists(args.output_folder) and not args.force:
+        print(f"Output folder: '{args.output_folder}' already exists "
+               "please remove or use --force to overwrite before running",
+               file=sys.stderr)
+        sys.exit(1)
+    elif os.path.exists(args.output_folder) and args.force:
+        utils.clean_and_remake_folder(args.output_folder)
+    else:
+        os.mkdir(args.output_folder)
+
 
     if args.verbose:
         logging.basicConfig(format="%(levelname)s:%(message)s",
                             level=logging.DEBUG,
-                            handlers=[logging.FileHandler(f"{run_name}.log"),
+                            handlers=[logging.FileHandler(f"{args.output_folder}/{run_name}.log"),
                                 logging.StreamHandler()])
 
     else:
         logging.basicConfig(format="%(levelname)s:%(message)s",
                             level=logging.INFO,
-                            handlers=[logging.FileHandler(f"{run_name}.log"),
+                            handlers=[logging.FileHandler(f"{args.output_folder}/{run_name}.log"),
                                 logging.StreamHandler()])
 
-    #logging.info(f"Started AMRtime
-    check_dependencies()
+    logging.info(f"Started AMRtime '{run_name}' outputting to {args.output_folder}")
+    utils.check_dependencies()
+
+    if args.mode == 'train':
+        train(args)
+    elif args.mode =='predict':
+        predict(args)
 
 
 def train(args):
@@ -105,32 +106,27 @@ def train(args):
             family_data['test']['X'], family_data['test']['y'],
             aro_data['test']['X'], aro_data['test']['y'])
 
-def classify(args):
-    card = parsers.CARD(args.card_fp)
-    trained_model = parsers.CARD(args.model)
 
-if __name__ == '__main__':
+def predict(args):
+    pass
 
-    parser = utils.get_parser()
-    args = parser.parse_args()
+    # check model_dir for trained models and card metadata
+    #card = parsers.CARD(args.card_fp)
+    #trained_model = parsers.CARD(args.model)
+
+    # if read passes DIAMOND filter
+    # encode read to kmers/features (maybe do in bulk for efficiency later)
+    # run against trained gene family predictor
+    # run against gene family model for highest predictor
+    # what is max(y_pred) for read
+    # evaluate against that gene family level model in the trained model
+    #   dictionary
 
     # ugh having an issue where the same sequence is appearing multiple times
     # in the card dna sequences thus leading to a mismatch in sequence number
     # when I key on accession during encoding/
     # why are the same sequences in card.dna_sequences multiple times?
     # have I fucked up my code or is that a thing in the CARD database
-    if args.mode == 'train':
-        train(args)
-
-    elif args.mode == 'classify':
-
         #if not os.path.exists(arg.model_dir):
         #    print('Must train first')
-        pass
-        # if read passes DIAMOND filter
-        # encode read to kmers/features (maybe do in bulk for efficiency later)
-        # run against trained gene family predictor
-        # run against gene family model for highest predictor
-        # what is max(y_pred) for read
-        # evaluate against that gene family level model in the trained model
-        #   dictionary
+

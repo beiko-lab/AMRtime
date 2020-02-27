@@ -13,7 +13,7 @@ from sklearn import ensemble
 from sklearn import preprocessing
 from sklearn import dummy
 from sklearn import metrics
-from sklearn.externals import joblib
+import joblib
 import pickle
 
 from amrtime import encoding

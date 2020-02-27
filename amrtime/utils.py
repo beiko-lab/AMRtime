@@ -4,6 +4,7 @@ import argparse
 import subprocess
 import pandas as pd
 import shutil
+import logging
 
 def is_valid_file(parser, arg):
     if not os.path.exists(arg):
@@ -11,18 +12,27 @@ def is_valid_file(parser, arg):
     else:
         return arg
 
-def get_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--redo", action="store_true",
-                        help="force overwrite and regeneration of data")
+def check_dependencies():
+    """
+    Check all dependencies exist and work
+    """
+    missing=False
+    for program in ["diamond version", "vsearch -v"]:
+        try:
+            output = subprocess.run(program, shell=True, check=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, encoding='utf-8')
+            version = output.stdout
+            logging.debug(f"Tool {program.split()[0]} is installed: {version}")
+        except:
+            logging.error(f"Tool {program.split()[0]} is not installed")
+            missing=True
+    if missing:
+        logging.error("One or more dependencies are missing please install")
+        sys.exit(1)
+    else:
+        logging.info("All dependencies found")
 
-    parser.add_argument("mode", choices=['test', 'train'],
-                        help="train model on new card version or evaluate "
-                              " trained models on new data")
-
-    parser.add_argument("card_fp", type=lambda x: is_valid_file(parser, x),
-                        help="Path to CARD json file")
-    return parser
 
 def classification_report_csv(report, fp):
     report_data = []
