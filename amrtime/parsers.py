@@ -8,7 +8,7 @@ import glob
 import re
 import os
 from Bio import SeqIO
-from Bio.SubsMat.MatrixInfo import blosum62
+from Bio.Align import substitution_matrices
 
 
 class CARD():
@@ -45,8 +45,7 @@ class CARD():
 
 
             self.supported_models = ['protein homolog model',
-                                     'protein variant model',
-                                     'protein overexpression model']
+                                     'protein variant model']
             if rrna:
                 self.supported_models.append('rRNA gene variant model')
 
@@ -75,15 +74,12 @@ class CARD():
             if "glycopeptide resistance gene cluster" in gene_families:
                 gene_families = ['glycopeptide resistance gene cluster']
 
-            # this is a fusion protein so can be assigned to a new class
-            if ARO_acc == '3002598':
-                gene_families = ["AAC(6')_ANT(3'')"]
-            if ARO_acc == '3002597':
-                gene_families = ["APH(2'')_AAC(6')"]
-            if ARO_acc in ['3002546', '3002600']:
-                gene_families = ["AAC(3)_AAC(6')"]
+            ## efflux components
+            if len(gene_families) > 1 and any(["pump" in fam for fam in gene_families]):
+                gene_families = ['efflux component']
 
-            # also a fusion so assigned a new fusion class
+
+          # also a fusion so assigned a new fusion class
             if 'class C LRA beta-lactamase' in gene_families and \
                     'class D LRA beta-lactamase' in gene_families:
                 gene_families = ['class D/class C beta-lactamase fusion']
@@ -93,46 +89,21 @@ class CARD():
                 gene_families = ['23S rRNA with mutation conferring resistance '
                                  'to macrolide and streptogramins antibiotics']
 
-            # additional self-resistance class to indicate resistance genes made by
-            # antibiotic producer removing the self resistant term
-            if "fluoroquinolone resistant parC" in gene_families and \
-                    "fluoroquinolone self resistant parC" in gene_families:
-                gene_families = ['fluoroquinolone resistant parC']
+            if ARO_acc == '3007431':
+                gene_families = ['alm glycyl carrier protein']
 
-            if "kirromycin self resistant EF-Tu" in gene_families and \
-                    'elfamycin resistant EF-Tu' in gene_families:
-                gene_families = ['elfamycin resistant EF-Tu']
+            if ARO_acc == '3007433':
+                gene_families = ['alm glycyltransferase']
 
-            if 'aminocoumarin self resistant parY' in gene_families and \
-                    'aminocoumarin resistant parY' in gene_families:
-                gene_families = ['aminocoumarin resistant parY']
+            if ARO_acc in ["3002547", "3005112", "3005114", "3005115",
+                           "3005116", "3005117", "3005118", "3005119"]:
+                gene_families = ["AAC(6')"]
 
-            # efflux components
-            if ARO_acc in ['3000263', '3000833', '3003382', '3000832',
-                           '3000815', '3003896', '3000823', '3003511',
-                           '3003381', '3000817', '3003895', '3000676',
-                           '3003383', '3003585', '3004107', '3003820']:
-                gene_families = ['efflux regulator']
-            if ARO_acc == '3000237':
-                gene_families = ['efflux component']
+            if ARO_acc == '3004364':
+                gene_families = ['lipid A acyltransferase']
 
-
-            # They are homologous parts of topo IV and II but it looks like this is actually parC
-            if 'fluoroquinolone resistant parC' in gene_families and \
-                    'fluoroquinolone resistant gyrA' in gene_families:
-                gene_families = ['fluoroquinolone resistant parC']
-
-
-            # things that need fixed
-            # this looks like a mistake and is only UhpA
-            if 'UhpT' in gene_families and 'UhpA' in gene_families:
-                gene_families = ['UhpA']
-
-            # missing families
-            if ARO_acc == "3004450":
-                gene_families = ['TRU beta-lactamase']
-            if ARO_acc == "3004294":
-                gene_families = ['BUT beta-lactamase']
+            if ARO_acc == "3007203":
+                gene_families = ['pmr phosphoethanolamine transferase']
 
             aro_to_gene_family.update({ARO_acc: gene_families})
 
@@ -270,14 +241,14 @@ class CARD():
         """
         k_param = 0.711
         lambda_param = 1.37
-        sub_matrix = blosum62
+        sub_matrix = substitution_matrices.load("BLOSUM62")
 
         aro_bitscores = {}
         for aro in self.proteins:
             raw_score = 0
 
             for aa in self.proteins[aro][1]:
-                raw_score += blosum62[(aa, aa)]
+                raw_score += sub_matrix[(aa, aa)]
             bitscore = (lambda_param * raw_score - math.log(k_param)) / math.log(2)
 
             aro_bitscores.update({aro: bitscore})
@@ -294,7 +265,7 @@ class CARD():
         # bit-scores but I can't find the damn things on the BLAST website
         k_param = 0.711
         lambda_param = 1.37
-        sub_matrix = blosum62
+        sub_matrix = substitution_matrices.load("BLOSUM62")
 
         family_bitscores = {}
         for aro in self.proteins:
@@ -305,7 +276,7 @@ class CARD():
                 continue
 
             for aa in self.proteins[aro][1]:
-                raw_score += blosum62[(aa, aa)]
+                raw_score += sub_matrix[(aa, aa)]
             bitscore = (lambda_param * raw_score - math.log(k_param)) / math.log(2)
 
             gene_family = self.aro_to_gene_family[aro]

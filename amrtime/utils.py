@@ -1,16 +1,22 @@
 #!/usr/bin/env python
-import os
+import os, sys
 import argparse
 import subprocess
 import pandas as pd
 import shutil
 import logging
+from pathlib import Path
 
-def is_valid_file(parser, arg):
-    if not os.path.exists(arg):
-        parser.error("The file {} does not exist".format(arg))
+def check_file(path: str) -> Path:
+    """
+    Check an input file exists and is readable
+    """
+    path = Path(path)
+    if path.exists() and path.is_file():
+        return path
     else:
-        return arg
+        raise argparse.ArgumentTypeError(f"{path} can't be read")
+
 
 def check_dependencies():
     """

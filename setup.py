@@ -28,17 +28,22 @@ setup(
     long_description=readme + '\n\n' + doclink + '\n\n' + history,
     author='Finlay Maguire',
     author_email='finlaymaguire@gmail.com',
-    url='https://github.com/fmaguire/AMRtime',
+    url='https://github.com/maguire-lab/AMRtime',
     packages=[
-        'AMRtime',
+        'amrtime',
     ],
-    package_dir={'AMRtime': 'amrtime'},
+    package_dir={'amrtime': 'amrtime'},
     include_package_data=True,
     install_requires=[
     ],
+    entry_points={
+        'console_scripts': [
+            'amrtime=amrtime.cli:main',
+        ],
+    },
     license='MIT',
     zip_safe=False,
-    keywords='AMRtime',
+    keywords='amrtime',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

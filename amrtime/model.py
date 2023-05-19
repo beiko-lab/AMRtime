@@ -191,7 +191,7 @@ def generate_training_data(card, redo=False):
                           folder=family_clustered_folder)
 
         with open(os.devnull, 'w') as null_fh:
-            subprocess.check_call(f"cd-hit -i {shlex.quote(family_fp)} -c 0.99 \
+            subprocess.check_call(f"cd-hit -i {shlex.quote(family_fp)} -c 0.95 \
                                     -o {shlex.quote(clustered_fp)}",
                                   shell=True,
                                   stderr=subprocess.STDOUT, stdout=null_fh)
@@ -262,7 +262,7 @@ def generate_training_data(card, redo=False):
                             stderr=subprocess.STDOUT, stdout=null_fh)
                     except:
                         subprocess.check_call(f'art_illumina -q -na -ss MSv3 -i {shlex.quote(family_fp)} \
-                            -c {diff_reads} -l 190 -rs 42 -o {shlex.quote(top_up_fq_fp)}', shell=True,
+                            -c {diff_reads} -l 150 -rs 42 -o {shlex.quote(top_up_fq_fp)}', shell=True,
                             stderr=subprocess.STDOUT, stdout=null_fh)
 
 

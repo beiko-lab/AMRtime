@@ -74,11 +74,11 @@ def train(args):
     card.json file
     """
 
-    card = parsers.CARD(args.card_fp)
+    card = parsers.CARD(args.card)
 
     #generate training data from card.json into labelled fastq
     family_fastq, family_labels, aro_fastq, aro_labels = \
-            model.generate_training_data(card, args.redo)
+            model.generate_training_data(card, args.force)
 
     #encode this prepared data
     #for the family-level model
@@ -111,7 +111,7 @@ def predict(args):
     pass
 
     # check model_dir for trained models and card metadata
-    #card = parsers.CARD(args.card_fp)
+    #card = parsers.CARD(args.card)
     #trained_model = parsers.CARD(args.model)
 
     # if read passes DIAMOND filter
